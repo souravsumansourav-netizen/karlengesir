@@ -13,6 +13,13 @@ export async function POST(request: NextRequest) {
       data: { user },
     } = await serverSupabase.auth.getUser();
 
+    const authHeader = request.headers.get("authorization");
+    if (authHeader && authHeader.startsWith("Bearer ")) {
+      const token = authHeader.replace("Bearer ", "").trim();
+      const { data } = await serverSupabase.auth.getUser(token);
+      if (data.user) user = data.user;
+    }
+
     if (!user) {
       return NextResponse.json(
         { error: "Forbidden: Admin sign-in required." },
@@ -20,14 +27,35 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const adminSupabase = createAdminClient();
-    const { data: adminRecord } = await adminSupabase
+    let isAuthorized = false;
+    const { data: adminRecord } = await serverSupabase
       .from("admins")
       .select("user_id")
       .eq("user_id", user.id)
-      .single();
+      .maybeSingle();
 
-    if (!adminRecord) {
+    if (adminRecord) {
+      isAuthorized = true;
+    } else {
+      const { data: rpcAdmin } = await serverSupabase.rpc("is_admin");
+      if (rpcAdmin) {
+        isAuthorized = true;
+      } else {
+        try {
+          const adminSupabase = createAdminClient();
+          const { data: fallbackRecord } = await adminSupabase
+            .from("admins")
+            .select("user_id")
+            .eq("user_id", user.id)
+            .maybeSingle();
+          if (fallbackRecord) isAuthorized = true;
+        } catch {
+          // Ignore service role error
+        }
+      }
+    }
+
+    if (!isAuthorized) {
       return NextResponse.json(
         { error: "Forbidden: Administrative privileges required." },
         { status: 403 }

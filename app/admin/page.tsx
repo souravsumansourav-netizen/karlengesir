@@ -7,6 +7,7 @@ import { useEffect, useState } from "react";
 import { formatBytes } from "@/lib/utils";
 import Link from "next/link";
 import toast from "react-hot-toast";
+import { createClient } from "@/lib/supabase/client";
 
 interface QuotaData {
   totalBytes: number;
@@ -53,9 +54,19 @@ export default function AdminDashboard() {
 
     setCleaning(true);
     try {
+      const supabase = createClient();
+      const {
+        data: { session },
+      } = await supabase.auth.getSession();
+
+      const headers: Record<string, string> = { "Content-Type": "application/json" };
+      if (session?.access_token) {
+        headers["Authorization"] = `Bearer ${session.access_token}`;
+      }
+
       const res = await fetch("/api/admin/clean-multipart", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers,
         body: JSON.stringify({ olderThanHours: 24 }),
       });
       const data = await res.json();

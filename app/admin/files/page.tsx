@@ -12,6 +12,7 @@ import { UploadModal } from "@/components/UploadModal";
 import Link from "next/link";
 import toast from "react-hot-toast";
 import { formatBytes } from "@/lib/utils";
+import { createClient } from "@/lib/supabase/client";
 
 export default function AdminFilesPage() {
   const { isAdmin, loading: adminLoading } = useAdmin();
@@ -66,9 +67,19 @@ export default function AdminFilesPage() {
 
     setBulkDeleting(true);
     try {
+      const supabase = createClient();
+      const {
+        data: { session },
+      } = await supabase.auth.getSession();
+
+      const headers: Record<string, string> = { "Content-Type": "application/json" };
+      if (session?.access_token) {
+        headers["Authorization"] = `Bearer ${session.access_token}`;
+      }
+
       const res = await fetch("/api/files", {
         method: "DELETE",
-        headers: { "Content-Type": "application/json" },
+        headers,
         body: JSON.stringify({ ids }),
       });
 

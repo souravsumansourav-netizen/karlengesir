@@ -18,9 +18,19 @@ export async function DELETE(
 
     // 1. Verify Supabase session server-side
     const serverSupabase = await createServerSupabase();
-    const {
-      data: { user },
-    } = await serverSupabase.auth.getUser();
+    const authHeader = _request.headers.get("authorization");
+    let user = null;
+
+    if (authHeader && authHeader.startsWith("Bearer ")) {
+      const token = authHeader.replace("Bearer ", "").trim();
+      const { data } = await serverSupabase.auth.getUser(token);
+      user = data.user;
+    }
+
+    if (!user) {
+      const { data } = await serverSupabase.auth.getUser();
+      user = data.user;
+    }
 
     if (!user) {
       return NextResponse.json(
@@ -30,14 +40,37 @@ export async function DELETE(
     }
 
     // 2. Confirm user exists in admins table
-    const adminSupabase = createAdminClient();
-    const { data: adminRecord, error: adminCheckErr } = await adminSupabase
+    // Check via serverSupabase (which has the user's JWT matching RLS policy `user_id = auth.uid()`)
+    let isAuthorized = false;
+    const { data: adminRecord } = await serverSupabase
       .from("admins")
       .select("user_id")
       .eq("user_id", user.id)
-      .single();
+      .maybeSingle();
 
-    if (adminCheckErr || !adminRecord) {
+    if (adminRecord) {
+      isAuthorized = true;
+    } else {
+      // Fallback: check via is_admin RPC or adminSupabase if service_role key configured
+      const { data: rpcAdmin } = await serverSupabase.rpc("is_admin");
+      if (rpcAdmin) {
+        isAuthorized = true;
+      } else {
+        try {
+          const adminSupabase = createAdminClient();
+          const { data: fallbackRecord } = await adminSupabase
+            .from("admins")
+            .select("user_id")
+            .eq("user_id", user.id)
+            .maybeSingle();
+          if (fallbackRecord) isAuthorized = true;
+        } catch {
+          // Ignore service role error
+        }
+      }
+    }
+
+    if (!isAuthorized) {
       return NextResponse.json(
         { error: "Forbidden: Administrative privileges required." },
         { status: 403 }
@@ -45,13 +78,30 @@ export async function DELETE(
     }
 
     // 3. Retrieve the target file row
-    const { data: file, error: fetchErr } = await adminSupabase
+    let file = null;
+    const { data: fileData } = await serverSupabase
       .from("files")
       .select("*")
       .eq("id", id)
-      .single();
+      .maybeSingle();
 
-    if (fetchErr || !file) {
+    if (fileData) {
+      file = fileData;
+    } else {
+      try {
+        const adminSupabase = createAdminClient();
+        const { data: fallbackFileData } = await adminSupabase
+          .from("files")
+          .select("*")
+          .eq("id", id)
+          .maybeSingle();
+        file = fallbackFileData;
+      } catch {
+        // Fallback failed
+      }
+    }
+
+    if (!file) {
       return NextResponse.json({ error: "File not found" }, { status: 404 });
     }
 
@@ -67,16 +117,33 @@ export async function DELETE(
     }
 
     // 5. Delete the database row
-    const { error: dbDeleteErr } = await adminSupabase
+    // Attempt delete using serverSupabase (which has the user's admin JWT matching RLS policy: `files: admin delete`),
+    // and fallback to adminSupabase if needed.
+    const { error: dbDeleteErr } = await serverSupabase
       .from("files")
       .delete()
       .eq("id", id);
 
     if (dbDeleteErr) {
-      return NextResponse.json(
-        { error: `Failed to delete file record: ${dbDeleteErr.message}` },
-        { status: 500 }
-      );
+      try {
+        const adminSupabase = createAdminClient();
+        const { error: fallbackDeleteErr } = await adminSupabase
+          .from("files")
+          .delete()
+          .eq("id", id);
+
+        if (fallbackDeleteErr) {
+          return NextResponse.json(
+            { error: `Failed to delete file record: ${fallbackDeleteErr.message || dbDeleteErr.message}` },
+            { status: 500 }
+          );
+        }
+      } catch {
+        return NextResponse.json(
+          { error: `Failed to delete file record: ${dbDeleteErr.message}` },
+          { status: 500 }
+        );
+      }
     }
 
     return NextResponse.json({

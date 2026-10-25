@@ -19,9 +19,19 @@ export async function DELETE(request: NextRequest) {
 
     // 1. Verify Supabase session server-side
     const serverSupabase = await createServerSupabase();
-    const {
-      data: { user },
-    } = await serverSupabase.auth.getUser();
+    const authHeader = request.headers.get("authorization");
+    let user = null;
+
+    if (authHeader && authHeader.startsWith("Bearer ")) {
+      const token = authHeader.replace("Bearer ", "").trim();
+      const { data } = await serverSupabase.auth.getUser(token);
+      user = data.user;
+    }
+
+    if (!user) {
+      const { data } = await serverSupabase.auth.getUser();
+      user = data.user;
+    }
 
     if (!user) {
       return NextResponse.json(
@@ -31,14 +41,35 @@ export async function DELETE(request: NextRequest) {
     }
 
     // 2. Confirm user exists in admins table
-    const adminSupabase = createAdminClient();
-    const { data: adminRecord, error: adminCheckErr } = await adminSupabase
+    let isAuthorized = false;
+    const { data: adminRecord } = await serverSupabase
       .from("admins")
       .select("user_id")
       .eq("user_id", user.id)
-      .single();
+      .maybeSingle();
 
-    if (adminCheckErr || !adminRecord) {
+    if (adminRecord) {
+      isAuthorized = true;
+    } else {
+      const { data: rpcAdmin } = await serverSupabase.rpc("is_admin");
+      if (rpcAdmin) {
+        isAuthorized = true;
+      } else {
+        try {
+          const adminSupabase = createAdminClient();
+          const { data: fallbackRecord } = await adminSupabase
+            .from("admins")
+            .select("user_id")
+            .eq("user_id", user.id)
+            .maybeSingle();
+          if (fallbackRecord) isAuthorized = true;
+        } catch {
+          // Ignore service role error
+        }
+      }
+    }
+
+    if (!isAuthorized) {
       return NextResponse.json(
         { error: "Forbidden: Administrative privileges required." },
         { status: 403 }
@@ -46,12 +77,28 @@ export async function DELETE(request: NextRequest) {
     }
 
     // 3. Retrieve the target file rows
-    const { data: filesToDelete, error: fetchErr } = await adminSupabase
+    let filesToDelete = null;
+    const { data: serverFiles, error: fetchErr } = await serverSupabase
       .from("files")
       .select("*")
       .in("id", ids);
 
-    if (fetchErr) {
+    if (serverFiles && serverFiles.length > 0) {
+      filesToDelete = serverFiles;
+    } else {
+      try {
+        const adminSupabase = createAdminClient();
+        const { data: fallbackFiles } = await adminSupabase
+          .from("files")
+          .select("*")
+          .in("id", ids);
+        filesToDelete = fallbackFiles;
+      } catch {
+        // Fallback failed
+      }
+    }
+
+    if (fetchErr && !filesToDelete) {
       return NextResponse.json(
         { error: `Failed to fetch files: ${fetchErr.message}` },
         { status: 500 }
@@ -78,16 +125,31 @@ export async function DELETE(request: NextRequest) {
     }
 
     // 5. Delete database rows
-    const { error: dbDeleteErr } = await adminSupabase
+    const { error: dbDeleteErr } = await serverSupabase
       .from("files")
       .delete()
       .in("id", ids);
 
     if (dbDeleteErr) {
-      return NextResponse.json(
-        { error: `Database delete error: ${dbDeleteErr.message}` },
-        { status: 500 }
-      );
+      try {
+        const adminSupabase = createAdminClient();
+        const { error: fallbackDeleteErr } = await adminSupabase
+          .from("files")
+          .delete()
+          .in("id", ids);
+
+        if (fallbackDeleteErr) {
+          return NextResponse.json(
+            { error: `Database delete error: ${fallbackDeleteErr.message || dbDeleteErr.message}` },
+            { status: 500 }
+          );
+        }
+      } catch {
+        return NextResponse.json(
+          { error: `Database delete error: ${dbDeleteErr.message}` },
+          { status: 500 }
+        );
+      }
     }
 
     return NextResponse.json({

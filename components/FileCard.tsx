@@ -5,6 +5,7 @@ import { formatBytes, getFileCategory } from "@/lib/utils";
 import { FileIcon } from "./FileIcon";
 import { FilePreviewModal } from "./FilePreviewModal";
 import type { FileRow, SubjectRow } from "@/lib/database.types";
+import { createClient } from "@/lib/supabase/client";
 import toast from "react-hot-toast";
 
 interface FileCardProps {
@@ -33,8 +34,19 @@ export function FileCard({ file, isAdmin, onDeleted, view }: FileCardProps) {
   const handleDelete = async () => {
     setDeleting(true);
     try {
+      const supabase = createClient();
+      const {
+        data: { session },
+      } = await supabase.auth.getSession();
+
+      const headers: Record<string, string> = {};
+      if (session?.access_token) {
+        headers["Authorization"] = `Bearer ${session.access_token}`;
+      }
+
       const res = await fetch(`/api/files/${file.id}`, {
         method: "DELETE",
+        headers,
       });
 
       const data = await res.json().catch(() => ({}));
