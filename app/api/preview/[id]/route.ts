@@ -3,6 +3,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { getStorageProvider } from "@/lib/storage";
 import { S3Client, GetObjectCommand } from "@aws-sdk/client-s3";
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
+import { formatContentDisposition } from "@/lib/utils";
 
 export const dynamic = "force-dynamic";
 
@@ -53,14 +54,11 @@ export async function GET(
         },
       });
 
-      const cleanName = file.file_name.replace(/["\r\n]/g, "");
-      const encodedName = encodeURIComponent(cleanName);
-
       const command = new GetObjectCommand({
         Bucket: bucket,
         Key: storageKey,
         ResponseContentType: file.mime_type || "application/octet-stream",
-        ResponseContentDisposition: `inline; filename="${cleanName}"; filename*=UTF-8''${encodedName}`,
+        ResponseContentDisposition: formatContentDisposition("inline", file.file_name),
       });
 
       const inlineUrl = await getSignedUrl(s3, command, { expiresIn: 600 }); // 10 min preview

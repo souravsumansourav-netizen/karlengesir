@@ -91,3 +91,27 @@ export function getFileCategory(mimeType: string | null): string {
   if (mimeType.startsWith("text/")) return "text";
   return "other";
 }
+
+/**
+ * Format Content-Disposition header conforming strictly to RFC 6266 & RFC 5987.
+ * Encodes all special characters including ' (single quote), (, ), and * in filename*
+ * to avoid parser failures on Backblaze B2 / S3.
+ */
+export function formatContentDisposition(
+  type: "attachment" | "inline",
+  filename: string
+): string {
+  // Strip control chars, quotes, backslashes, and carriage returns for ASCII filename fallback
+  const asciiFallback = filename
+    .replace(/["\\\r\n]/g, "")
+    .replace(/[^\x20-\x7E]/g, "_");
+
+  // RFC 5987 percent-encoding: encodeURIComponent does not encode '()*
+  // which are reserved in RFC 5987 parameter syntax and cause Backblaze B2 syntax errors.
+  const rfc5987Encoded = encodeURIComponent(filename.replace(/[\r\n]/g, "")).replace(
+    /['()*]/g,
+    (c) => `%${c.charCodeAt(0).toString(16).toUpperCase()}`
+  );
+
+  return `${type}; filename="${asciiFallback}"; filename*=UTF-8''${rfc5987Encoded}`;
+}

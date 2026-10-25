@@ -11,6 +11,7 @@ import {
 } from "@aws-sdk/client-s3";
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
 import { MULTIPART_THRESHOLD_BYTES, MULTIPART_PART_SIZE_BYTES } from "../constants";
+import { formatContentDisposition } from "../utils";
 import type {
   StorageProvider,
   CreateUploadResult,
@@ -186,10 +187,8 @@ export class B2Provider implements StorageProvider {
     originalFilename: string;
     expiresInSeconds?: number;
   }): Promise<string> {
-    // Preserve original filename on download via RFC 5987 / standard content-disposition
-    const cleanName = originalFilename.replace(/["\r\n]/g, "");
-    const encodedName = encodeURIComponent(cleanName);
-    const disposition = `attachment; filename="${cleanName}"; filename*=UTF-8''${encodedName}`;
+    // Preserve original filename on download via RFC 6266 / RFC 5987 content-disposition
+    const disposition = formatContentDisposition("attachment", originalFilename);
 
     const command = new GetObjectCommand({
       Bucket: this.bucket,
