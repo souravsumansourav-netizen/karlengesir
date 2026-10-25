@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getStorageProvider } from "@/lib/storage";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { ANON_UPLOADER_DEFAULT } from "@/lib/constants";
+import type { Database } from "@/lib/database.types";
 
 export const dynamic = "force-dynamic";
 
@@ -57,45 +58,50 @@ export async function POST(request: NextRequest) {
     let insertedFile = null;
     let dbError = null;
 
-    // Try modern schema (storage_key & storage_provider)
+    // Supply both storage_key and storage_path to satisfy whichever not-null constraint exists
+    const primaryPayload: Record<string, string | number | null | undefined> = {
+      id: fileId,
+      subject_id: subjectId || null,
+      file_name: fileName,
+      storage_key: storageKey,
+      storage_path: storageKey,
+      storage_provider: provider.name,
+      mime_type: mimeType || null,
+      size_bytes: Number(sizeBytes),
+      description: description?.trim() || null,
+      uploader_name: uploaderName?.trim() || ANON_UPLOADER_DEFAULT,
+      download_count: 0,
+    };
+
     const primaryInsert = await supabase
       .from("files")
-      .insert({
-        id: fileId,
-        subject_id: subjectId || null,
-        file_name: fileName,
-        storage_key: storageKey,
-        storage_provider: provider.name,
-        mime_type: mimeType || null,
-        size_bytes: Number(sizeBytes),
-        description: description?.trim() || null,
-        uploader_name: uploaderName?.trim() || ANON_UPLOADER_DEFAULT,
-        download_count: 0,
-      })
+      .insert(primaryPayload as unknown as Database["public"]["Tables"]["files"]["Insert"])
       .select()
       .single();
 
     if (primaryInsert.error) {
-      // If storage_key or storage_provider column is not yet migrated in Supabase, fall back to storage_path
+      // If either storage_key, storage_provider, or storage_path is not in schema cache, remove and retry
       if (
         primaryInsert.error.code === "PGRST204" ||
         primaryInsert.error.message?.includes("storage_key") ||
-        primaryInsert.error.message?.includes("storage_provider")
+        primaryInsert.error.message?.includes("storage_provider") ||
+        primaryInsert.error.message?.includes("storage_path")
       ) {
-        console.log("Falling back to legacy storage_path column in files table...");
+        console.log("Retrying with adapted payload...");
+        const adaptedPayload = { ...primaryPayload };
+        if (primaryInsert.error.message?.includes("storage_key")) {
+          delete adaptedPayload.storage_key;
+        }
+        if (primaryInsert.error.message?.includes("storage_provider")) {
+          delete adaptedPayload.storage_provider;
+        }
+        if (primaryInsert.error.message?.includes("storage_path")) {
+          delete adaptedPayload.storage_path;
+        }
+
         const fallbackInsert = await supabase
           .from("files")
-          .insert({
-            id: fileId,
-            subject_id: subjectId || null,
-            file_name: fileName,
-            storage_path: storageKey,
-            mime_type: mimeType || null,
-            size_bytes: Number(sizeBytes),
-            description: description?.trim() || null,
-            uploader_name: uploaderName?.trim() || ANON_UPLOADER_DEFAULT,
-            download_count: 0,
-          })
+          .insert(adaptedPayload as unknown as Database["public"]["Tables"]["files"]["Insert"])
           .select()
           .single();
 
