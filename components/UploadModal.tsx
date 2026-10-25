@@ -3,7 +3,7 @@
 import { useCallback, useRef, useState } from "react";
 import { useUpload } from "@/hooks/useUpload";
 import type { SubjectRow } from "@/lib/database.types";
-import { MAX_FILE_SIZE_MB } from "@/lib/constants";
+import { MAX_FILE_SIZE_BYTES } from "@/lib/constants";
 import { formatBytes } from "@/lib/utils";
 import toast from "react-hot-toast";
 
@@ -98,7 +98,7 @@ export function UploadModal({ subjects, onClose, onSuccess, onNewSubject }: Uplo
           <p className="drop-zone__text">
             Drag & drop files here, or <span className="link-text">click to browse</span>
           </p>
-          <p className="drop-zone__hint">Any file type · Max {MAX_FILE_SIZE_MB} MB per file</p>
+          <p className="drop-zone__hint">Any file type · Max {formatBytes(MAX_FILE_SIZE_BYTES, 0)} per file</p>
         </div>
 
         {/* File queue */}

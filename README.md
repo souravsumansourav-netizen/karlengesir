@@ -169,7 +169,7 @@ In the Vercel dashboard → **Settings → Environment Variables**, add:
 - **Storage policies** enforce the same — anon users cannot delete objects.
 - Filenames are sanitized (`lib/utils.ts → sanitizeFilename`) before upload.
 - User-provided text (filenames, descriptions, uploader names) is rendered via React's built-in escaping — no `dangerouslySetInnerHTML`.
-- File size is capped at `MAX_FILE_SIZE_MB` (default 50 MB) — both client-side and can be enforced at the Storage bucket level.
+- File size is capped at `MAX_FILE_SIZE_MB` (default 1024 MB / 1 GB) — both client-side and can be enforced at the Storage bucket level.
 - For public-facing production: consider adding **Cloudflare Turnstile** or rate-limiting to the upload endpoint to prevent abuse.
 
 ---
@@ -179,7 +179,7 @@ In the Vercel dashboard → **Settings → Environment Variables**, add:
 Edit `lib/constants.ts` to change:
 
 ```ts
-export const MAX_FILE_SIZE_MB = 50; // Change to match your Supabase plan
+export const MAX_FILE_SIZE_MB = 1024; // 1 GB (Change to 500 or your Supabase plan limit)
 ```
 
 ---

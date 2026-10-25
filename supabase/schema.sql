@@ -125,6 +125,11 @@ $$;
 -- Create the bucket via the Supabase dashboard or the CLI:
 --   supabase storage create-bucket shared-files --public
 --
+-- File Size Limit:
+-- Default is 50 MB on Supabase Free Plan. On Supabase Pro, up to 5 GB is supported.
+-- To set the bucket limit to 1 GB (1,073,741,824 bytes) or 500 MB (524,288,000 bytes) via SQL:
+--   update storage.buckets set file_size_limit = 1073741824 where id = 'shared-files';
+--
 -- Then add these Storage Policies via the dashboard → Storage → Policies
 -- (SQL editor currently cannot create storage policies directly).
 --

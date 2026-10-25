@@ -2,8 +2,8 @@
 
 import { useCallback, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
-import { MAX_FILE_SIZE_BYTES, MAX_FILE_SIZE_MB, STORAGE_BUCKET, ANON_UPLOADER_DEFAULT } from "@/lib/constants";
-import { buildStoragePath, slugify } from "@/lib/utils";
+import { MAX_FILE_SIZE_BYTES, STORAGE_BUCKET, ANON_UPLOADER_DEFAULT } from "@/lib/constants";
+import { buildStoragePath, formatBytes, slugify } from "@/lib/utils";
 import { v4 as uuidv4 } from "uuid";
 import type { SubjectRow } from "@/lib/database.types";
 
@@ -38,7 +38,7 @@ export function useUpload({ subjects, onSuccess, onNewSubject }: UseUploadProps)
           file: f,
           progress: 0,
           status: "error",
-          error: `File exceeds ${MAX_FILE_SIZE_MB} MB limit`,
+          error: `File exceeds ${formatBytes(MAX_FILE_SIZE_BYTES, 0)} limit`,
         };
       }
       return { id: uuidv4(), file: f, progress: 0, status: "pending" };
