@@ -36,9 +36,11 @@ export async function GET(
     }
 
     // 3. Generate presigned GET download URL with Content-Disposition = attachment
-    const provider = getStorageProvider(file.storage_provider);
+    const storageKey = file.storage_key || file.storage_path || "";
+    const storageProvider = file.storage_provider || "b2";
+    const provider = getStorageProvider(storageProvider);
     const downloadUrl = await provider.getDownloadUrl({
-      key: file.storage_key,
+      key: storageKey,
       originalFilename: file.file_name,
       expiresInSeconds: 300, // 5 minutes expiry
     });

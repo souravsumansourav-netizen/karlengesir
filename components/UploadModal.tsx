@@ -85,8 +85,11 @@ export function UploadModal({ subjects, onClose, onSuccess, onNewSubject }: Uplo
     subjects,
     onNewSubject,
     onAllComplete: () => {
-      toast.success("All uploads completed successfully!");
+      toast.success("Upload completed successfully!");
       onSuccess();
+    },
+    onError: (errMsg: string) => {
+      toast.error(errMsg);
     },
   });
 

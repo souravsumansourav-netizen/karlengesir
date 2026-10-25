@@ -28,6 +28,7 @@ interface UseUploadOptions {
   subjects: SubjectRow[];
   onNewSubject?: (s: SubjectRow) => void;
   onAllComplete?: () => void;
+  onError?: (error: string) => void;
 }
 
 interface CompletedPart {
@@ -35,7 +36,7 @@ interface CompletedPart {
   etag: string;
 }
 
-export function useUpload({ onNewSubject, onAllComplete }: UseUploadOptions) {
+export function useUpload({ onNewSubject, onAllComplete, onError }: UseUploadOptions) {
   const [files, setFiles] = useState<FileToUpload[]>([]);
   const [uploaderName, setUploaderName] = useState(ANON_UPLOADER_DEFAULT);
   const [description, setDescription] = useState("");
@@ -409,7 +410,16 @@ export function useUpload({ onNewSubject, onAllComplete }: UseUploadOptions) {
     }
 
     setIsUploading(false);
-    onAllComplete?.();
+    const finalFiles = filesRef.current;
+    const hasErrors = finalFiles.some((f) => f.status === "error");
+    const anyDone = finalFiles.some((f) => f.status === "done");
+
+    if (hasErrors) {
+      const firstError = finalFiles.find((f) => f.status === "error");
+      onError?.(firstError?.error || "Upload failed for one or more files.");
+    } else if (anyDone) {
+      onAllComplete?.();
+    }
   };
 
   return {

@@ -35,8 +35,9 @@ export interface Database {
           id: string;
           subject_id: string | null;
           file_name: string;
-          storage_key: string;
-          storage_provider: string;
+          storage_key?: string;
+          storage_path?: string;
+          storage_provider?: string;
           mime_type: string | null;
           size_bytes: number;
           description: string | null;
@@ -48,7 +49,8 @@ export interface Database {
           id?: string;
           subject_id?: string | null;
           file_name: string;
-          storage_key: string;
+          storage_key?: string;
+          storage_path?: string;
           storage_provider?: string;
           mime_type?: string | null;
           size_bytes: number;
@@ -62,6 +64,7 @@ export interface Database {
           subject_id?: string | null;
           file_name?: string;
           storage_key?: string;
+          storage_path?: string;
           storage_provider?: string;
           mime_type?: string | null;
           size_bytes?: number;

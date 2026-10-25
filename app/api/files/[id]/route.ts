@@ -56,9 +56,11 @@ export async function DELETE(
     }
 
     // 4. Delete the object from Backblaze B2
-    const provider = getStorageProvider(file.storage_provider);
+    const storageKey = file.storage_key || file.storage_path || "";
+    const storageProvider = file.storage_provider || "b2";
+    const provider = getStorageProvider(storageProvider);
     try {
-      await provider.deleteObject(file.storage_key);
+      if (storageKey) await provider.deleteObject(storageKey);
     } catch (storageErr) {
       console.warn("Could not delete object from storage:", storageErr);
       // Proceed to delete DB record even if storage deletion returned not found

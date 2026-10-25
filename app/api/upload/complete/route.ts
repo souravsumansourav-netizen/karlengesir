@@ -51,9 +51,14 @@ export async function POST(request: NextRequest) {
       });
     }
 
-    // Insert metadata row into Supabase Postgres using Admin client (bypassing client-only insert blocks)
+    // Insert metadata row into Supabase Postgres
     const supabase = createAdminClient();
-    const { data: insertedFile, error: dbError } = await supabase
+
+    let insertedFile = null;
+    let dbError = null;
+
+    // Try modern schema (storage_key & storage_provider)
+    const primaryInsert = await supabase
       .from("files")
       .insert({
         id: fileId,
@@ -70,14 +75,41 @@ export async function POST(request: NextRequest) {
       .select()
       .single();
 
+    if (primaryInsert.error) {
+      // If storage_key or storage_provider column is not yet migrated in Supabase, fall back to storage_path
+      if (
+        primaryInsert.error.code === "PGRST204" ||
+        primaryInsert.error.message?.includes("storage_key") ||
+        primaryInsert.error.message?.includes("storage_provider")
+      ) {
+        console.log("Falling back to legacy storage_path column in files table...");
+        const fallbackInsert = await supabase
+          .from("files")
+          .insert({
+            id: fileId,
+            subject_id: subjectId || null,
+            file_name: fileName,
+            storage_path: storageKey,
+            mime_type: mimeType || null,
+            size_bytes: Number(sizeBytes),
+            description: description?.trim() || null,
+            uploader_name: uploaderName?.trim() || ANON_UPLOADER_DEFAULT,
+            download_count: 0,
+          })
+          .select()
+          .single();
+
+        insertedFile = fallbackInsert.data;
+        dbError = fallbackInsert.error;
+      } else {
+        dbError = primaryInsert.error;
+      }
+    } else {
+      insertedFile = primaryInsert.data;
+    }
+
     if (dbError) {
       console.error("DB error saving file record:", dbError);
-      // Attempt cleanup of orphaned storage object on DB failure
-      try {
-        await provider.deleteObject(storageKey);
-      } catch (cleanupErr) {
-        console.warn("Could not cleanup storage object after DB error:", cleanupErr);
-      }
       return NextResponse.json(
         { error: `Database error: ${dbError.message}` },
         { status: 500 }

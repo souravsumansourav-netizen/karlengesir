@@ -68,10 +68,12 @@ export async function DELETE(request: NextRequest) {
     // 4. Delete objects from Backblaze B2
     for (const file of filesToDelete) {
       try {
-        const provider = getStorageProvider(file.storage_provider);
-        await provider.deleteObject(file.storage_key);
+        const storageKey = file.storage_key || file.storage_path || "";
+        const storageProvider = file.storage_provider || "b2";
+        const provider = getStorageProvider(storageProvider);
+        if (storageKey) await provider.deleteObject(storageKey);
       } catch (storageErr) {
-        console.warn(`Could not delete storage key ${file.storage_key}:`, storageErr);
+        console.warn(`Could not delete storage key:`, storageErr);
       }
     }
 

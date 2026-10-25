@@ -28,6 +28,9 @@ export async function GET(
       return NextResponse.json({ error: "File not found" }, { status: 404 });
     }
 
+    const storageKey = file.storage_key || file.storage_path || "";
+    const storageProvider = file.storage_provider || "b2";
+
     // For Backblaze B2, create an inline presigned GET URL
     const keyId = process.env.B2_KEY_ID;
     const appKey = process.env.B2_APPLICATION_KEY;
@@ -35,7 +38,7 @@ export async function GET(
     let endpoint = process.env.B2_ENDPOINT || "s3.us-west-004.backblazeb2.com";
     const region = process.env.B2_REGION || "us-west-004";
 
-    if (file.storage_provider === "b2" && keyId && appKey && bucket) {
+    if (storageProvider === "b2" && keyId && appKey && bucket) {
       if (!endpoint.startsWith("http://") && !endpoint.startsWith("https://")) {
         endpoint = `https://${endpoint}`;
       }
@@ -55,7 +58,7 @@ export async function GET(
 
       const command = new GetObjectCommand({
         Bucket: bucket,
-        Key: file.storage_key,
+        Key: storageKey,
         ResponseContentType: file.mime_type || "application/octet-stream",
         ResponseContentDisposition: `inline; filename="${cleanName}"; filename*=UTF-8''${encodedName}`,
       });
@@ -65,9 +68,9 @@ export async function GET(
     }
 
     // Fallback to standard provider download url
-    const provider = getStorageProvider(file.storage_provider);
+    const provider = getStorageProvider(storageProvider);
     const fallbackUrl = await provider.getDownloadUrl({
-      key: file.storage_key,
+      key: storageKey,
       originalFilename: file.file_name,
       expiresInSeconds: 600,
     });
