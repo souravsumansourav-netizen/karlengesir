@@ -150,7 +150,41 @@ export function useUpload({ onNewSubject, onAllComplete, onError }: UseUploadOpt
         }
       };
 
-      xhr.onerror = () => reject(new Error("Network error during direct upload to Backblaze B2"));
+      xhr.onerror = async () => {
+        console.warn("XHR upload encountered network error, attempting fetch fallback...");
+        try {
+          const res = await fetch(uploadUrl, {
+            method: "PUT",
+            headers: {
+              "Content-Type": entry.file.type || "application/octet-stream",
+            },
+            body: entry.file,
+            signal: controller.signal,
+          });
+
+          if (res.ok) {
+            updateFile(entry.id, { progress: 99 });
+            resolve();
+            return;
+          }
+
+          const resText = await res.text().catch(() => "");
+          reject(
+            new Error(
+              `B2 upload failed with status ${res.status}: ${res.statusText} ${resText}`.trim()
+            )
+          );
+        } catch (fetchErr: unknown) {
+          console.error("Direct B2 upload error:", fetchErr);
+          const detail = fetchErr instanceof Error ? fetchErr.message : String(fetchErr);
+          reject(
+            new Error(
+              `Network error during direct upload to Backblaze B2 (${detail}). Ensure bucket CORS is configured and any ad-blockers allow backblazeb2.com.`
+            )
+          );
+        }
+      };
+
       xhr.onabort = () => reject(new Error("Upload cancelled by user"));
 
       controller.signal.addEventListener("abort", () => {
