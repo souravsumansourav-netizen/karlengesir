@@ -109,10 +109,10 @@ export default function AdminSubjectsPage() {
   return (
     <div className="admin-layout">
       <aside className="admin-sidebar">
-        <p className="admin-sidebar__title">Admin</p>
+        <p className="admin-sidebar__title">Admin Control</p>
         <nav>
           <Link href="/admin" className="admin-nav-link">📊 Dashboard</Link>
-          <Link href="/admin/files" className="admin-nav-link">📁 Files</Link>
+          <Link href="/admin/files" className="admin-nav-link">📁 Files & Bulk Delete</Link>
           <Link href="/admin/subjects" className="admin-nav-link admin-nav-link--active">🗂️ Subjects</Link>
           <Link href="/" className="admin-nav-link">🌐 View Site</Link>
         </nav>

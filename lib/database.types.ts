@@ -35,9 +35,10 @@ export interface Database {
           id: string;
           subject_id: string | null;
           file_name: string;
-          storage_path: string;
+          storage_key: string;
+          storage_provider: string;
           mime_type: string | null;
-          size_bytes: number | null;
+          size_bytes: number;
           description: string | null;
           uploader_name: string;
           download_count: number;
@@ -47,9 +48,10 @@ export interface Database {
           id?: string;
           subject_id?: string | null;
           file_name: string;
-          storage_path: string;
+          storage_key: string;
+          storage_provider?: string;
           mime_type?: string | null;
-          size_bytes?: number | null;
+          size_bytes: number;
           description?: string | null;
           uploader_name?: string;
           download_count?: number;
@@ -59,9 +61,10 @@ export interface Database {
           id?: string;
           subject_id?: string | null;
           file_name?: string;
-          storage_path?: string;
+          storage_key?: string;
+          storage_provider?: string;
           mime_type?: string | null;
-          size_bytes?: number | null;
+          size_bytes?: number;
           description?: string | null;
           uploader_name?: string;
           download_count?: number;
@@ -92,9 +95,9 @@ export interface Database {
         Args: { file_id: string };
         Returns: void;
       };
-      admin_delete_file: {
-        Args: { file_id: string };
-        Returns: string;
+      get_storage_usage: {
+        Args: Record<string, never>;
+        Returns: { total_bytes: number; file_count: number }[];
       };
       is_admin: {
         Args: Record<string, never>;
