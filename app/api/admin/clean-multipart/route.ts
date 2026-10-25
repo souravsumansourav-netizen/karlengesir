@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { createClient as createServerSupabase } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { getStorageProvider } from "@/lib/storage";
+import type { User } from "@supabase/supabase-js";
 
 export const dynamic = "force-dynamic";
 
@@ -10,8 +11,9 @@ export async function POST(request: NextRequest) {
     // 1. Verify admin session
     const serverSupabase = await createServerSupabase();
     const {
-      data: { user },
+      data: { user: initialUser },
     } = await serverSupabase.auth.getUser();
+    let user: User | null = initialUser;
 
     const authHeader = request.headers.get("authorization");
     if (authHeader && authHeader.startsWith("Bearer ")) {
