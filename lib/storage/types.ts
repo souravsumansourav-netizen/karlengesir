@@ -79,6 +79,16 @@ export interface StorageProvider {
   }): Promise<void>;
 
   /**
+   * Directly upload a multipart chunk from the server to storage (fallback when browser direct part upload is blocked).
+   */
+  uploadPartDirect?(params: {
+    key: string;
+    uploadId: string;
+    partNumber: number;
+    body: Buffer | Uint8Array;
+  }): Promise<{ etag: string }>;
+
+  /**
    * Stream an object directly from storage (fallback for downloads when direct B2 is blocked).
    */
   getObjectStream?(params: {

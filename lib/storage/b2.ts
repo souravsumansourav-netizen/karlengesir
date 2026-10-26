@@ -220,6 +220,29 @@ export class B2Provider implements StorageProvider {
     await this.client.send(command);
   }
 
+  async uploadPartDirect({
+    key,
+    uploadId,
+    partNumber,
+    body,
+  }: {
+    key: string;
+    uploadId: string;
+    partNumber: number;
+    body: Buffer | Uint8Array;
+  }): Promise<{ etag: string }> {
+    const command = new UploadPartCommand({
+      Bucket: this.bucket,
+      Key: key,
+      UploadId: uploadId,
+      PartNumber: partNumber,
+      Body: body,
+    });
+
+    const res = await this.client.send(command);
+    return { etag: (res.ETag || "").replace(/^"|"$/g, "") };
+  }
+
   async getObjectStream({
     key,
   }: {

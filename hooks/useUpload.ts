@@ -318,6 +318,8 @@ export function useUpload({ onNewSubject, onAllComplete, onError }: UseUploadOpt
 
     // Queue of part indexes to process
     let currentPartIndex = 0;
+    // If direct B2 connection fails on any part (ISP block, ad-blocker, etc.), switch all parts to server proxy
+    let directBlocked = false;
 
     const uploadPartWithRetry = async (part: { partNumber: number; url: string }) => {
       const partIdx = part.partNumber - 1;
@@ -332,26 +334,70 @@ export function useUpload({ onNewSubject, onAllComplete, onError }: UseUploadOpt
           throw new Error("Upload cancelled by user");
         }
 
-        try {
-          const res = await fetch(part.url, {
-            method: "PUT",
-            body: chunk,
-            signal: controller.signal,
-          });
+        let cleanEtag: string | null = null;
 
-          if (!res.ok) {
-            throw new Error(`Part ${part.partNumber} failed with status ${res.status}`);
-          }
+        // Try direct B2 PUT first if not previously blocked
+        if (!directBlocked) {
+          try {
+            const res = await fetch(part.url, {
+              method: "PUT",
+              body: chunk,
+              signal: controller.signal,
+            });
 
-          // Backblaze B2 returns ETag in response headers (exposed via cors.json)
-          const etagHeader = res.headers.get("etag") || res.headers.get("ETag");
-          if (!etagHeader) {
-            throw new Error(
-              `Part ${part.partNumber} succeeded but no ETag header received. Check bucket CORS settings.`
+            if (res.ok) {
+              const etagHeader = res.headers.get("etag") || res.headers.get("ETag");
+              if (etagHeader) {
+                cleanEtag = etagHeader.replace(/^"|"$/g, "");
+              }
+            } else {
+              console.warn(`Direct B2 upload for part ${part.partNumber} returned status ${res.status}`);
+            }
+          } catch (directErr) {
+            if (controller.signal.aborted) throw directErr;
+            console.warn(
+              `Direct B2 upload for part ${part.partNumber} failed (network/adblock/ISP). Switching all parts to server proxy...`
             );
+            directBlocked = true;
           }
+        }
 
-          const cleanEtag = etagHeader.replace(/^"|"$/g, "");
+        // If direct upload didn't produce an ETag (or was blocked), use server proxy fallback
+        if (!cleanEtag) {
+          try {
+            const formData = new FormData();
+            formData.append("chunk", chunk);
+            formData.append("key", storageKey);
+            formData.append("uploadId", uploadId);
+            formData.append("partNumber", String(part.partNumber));
+            formData.append("storageProvider", storageProvider);
+
+            const proxyRes = await fetch("/api/upload/proxy-part", {
+              method: "POST",
+              body: formData,
+              signal: controller.signal,
+            });
+
+            if (!proxyRes.ok) {
+              const errData = await proxyRes.json().catch(() => ({}));
+              throw new Error(errData.error || `Proxy part upload failed with status ${proxyRes.status}`);
+            }
+
+            const proxyData = await proxyRes.json();
+            cleanEtag = proxyData.etag;
+          } catch (proxyErr: unknown) {
+            lastError = proxyErr instanceof Error ? proxyErr : new Error(String(proxyErr));
+            if (controller.signal.aborted) throw lastError;
+
+            if (attempt < MAX_PART_RETRIES) {
+              const delay = 1000 * Math.pow(2, attempt - 1);
+              await new Promise((r) => setTimeout(r, delay));
+              continue;
+            }
+          }
+        }
+
+        if (cleanEtag) {
           completedParts.push({
             partNumber: part.partNumber,
             etag: cleanEtag,
@@ -367,15 +413,6 @@ export function useUpload({ onNewSubject, onAllComplete, onError }: UseUploadOpt
           });
 
           return; // Success
-        } catch (err: unknown) {
-          lastError = err instanceof Error ? err : new Error(String(err));
-          if (controller.signal.aborted) throw lastError;
-
-          if (attempt < MAX_PART_RETRIES) {
-            // Exponential backoff: 1s, 2s, 4s
-            const delay = 1000 * Math.pow(2, attempt - 1);
-            await new Promise((r) => setTimeout(r, delay));
-          }
         }
       }
 
