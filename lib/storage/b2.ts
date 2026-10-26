@@ -247,14 +247,18 @@ export class B2Provider implements StorageProvider {
     key,
   }: {
     key: string;
-  }): Promise<{ stream: unknown; contentType?: string; contentLength?: number }> {
+  }): Promise<{ stream: ReadableStream | null; contentType?: string; contentLength?: number }> {
     const command = new GetObjectCommand({
       Bucket: this.bucket,
       Key: key,
     });
     const res = await this.client.send(command);
+    const webStream = res.Body && "transformToWebStream" in res.Body
+      ? (res.Body as { transformToWebStream: () => ReadableStream }).transformToWebStream()
+      : null;
+
     return {
-      stream: res.Body,
+      stream: webStream,
       contentType: res.ContentType,
       contentLength: res.ContentLength,
     };

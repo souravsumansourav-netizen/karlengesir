@@ -35,31 +35,34 @@ export async function GET(
       console.warn("Error incrementing download count:", rpcErr);
     }
 
-    // 3. If proxy download is requested or provider supports streaming fallback, stream directly
+    // 3. Stream file directly from storage through server
+    // This avoids redirecting clients to Backblaze B2, preventing ISP/DNS/adblock blocks
     const storageKey = file.storage_key || file.storage_path || "";
     const storageProvider = file.storage_provider || "b2";
     const provider = getStorageProvider(storageProvider);
 
-    if (_request.nextUrl.searchParams.get("proxy") === "true" && provider.getObjectStream) {
+    if (provider.getObjectStream) {
       const { stream, contentType, contentLength } = await provider.getObjectStream({ key: storageKey });
-      const { formatContentDisposition } = await import("@/lib/utils");
-      return new Response(stream as BodyInit, {
-        headers: {
-          "Content-Type": contentType || "application/octet-stream",
-          "Content-Disposition": formatContentDisposition("attachment", file.file_name),
-          ...(contentLength ? { "Content-Length": String(contentLength) } : {}),
-        },
-      });
+      if (stream) {
+        const { formatContentDisposition } = await import("@/lib/utils");
+        return new Response(stream, {
+          headers: {
+            "Content-Type": file.mime_type || contentType || "application/octet-stream",
+            "Content-Disposition": formatContentDisposition("attachment", file.file_name),
+            ...(contentLength ? { "Content-Length": String(contentLength) } : {}),
+            "Cache-Control": "private, max-age=3600",
+          },
+        });
+      }
     }
 
-    // 4. Generate presigned GET download URL with Content-Disposition = attachment
+    // 4. Fallback: generate presigned GET download URL if provider is not B2
     const downloadUrl = await provider.getDownloadUrl({
       key: storageKey,
       originalFilename: file.file_name,
       expiresInSeconds: 300, // 5 minutes expiry
     });
 
-    // 5. Redirect client to presigned download URL
     return NextResponse.redirect(downloadUrl, { status: 302 });
   } catch (error: unknown) {
     console.error("Error in /api/download/[id]:", error);

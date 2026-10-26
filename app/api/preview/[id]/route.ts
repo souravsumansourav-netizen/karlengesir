@@ -1,8 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { getStorageProvider } from "@/lib/storage";
-import { S3Client, GetObjectCommand } from "@aws-sdk/client-s3";
-import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
 import { formatContentDisposition } from "@/lib/utils";
 
 export const dynamic = "force-dynamic";
@@ -32,41 +30,25 @@ export async function GET(
     const storageKey = file.storage_key || file.storage_path || "";
     const storageProvider = file.storage_provider || "b2";
 
-    // For Backblaze B2, create an inline presigned GET URL
-    const keyId = process.env.B2_KEY_ID;
-    const appKey = process.env.B2_APPLICATION_KEY;
-    const bucket = process.env.B2_BUCKET;
-    let endpoint = process.env.B2_ENDPOINT || "s3.us-west-004.backblazeb2.com";
-    const region = process.env.B2_REGION || "us-west-004";
+    // 2. Stream preview file directly through server with inline Content-Disposition
+    // This avoids redirecting clients to Backblaze B2, preventing ISP/DNS/adblock blocks
+    const provider = getStorageProvider(storageProvider);
 
-    if (storageProvider === "b2" && keyId && appKey && bucket) {
-      if (!endpoint.startsWith("http://") && !endpoint.startsWith("https://")) {
-        endpoint = `https://${endpoint}`;
+    if (provider.getObjectStream) {
+      const { stream, contentType, contentLength } = await provider.getObjectStream({ key: storageKey });
+      if (stream) {
+        return new Response(stream, {
+          headers: {
+            "Content-Type": file.mime_type || contentType || "application/octet-stream",
+            "Content-Disposition": formatContentDisposition("inline", file.file_name),
+            ...(contentLength ? { "Content-Length": String(contentLength) } : {}),
+            "Cache-Control": "private, max-age=600",
+          },
+        });
       }
-
-      const s3 = new S3Client({
-        endpoint,
-        region,
-        forcePathStyle: true,
-        credentials: {
-          accessKeyId: keyId,
-          secretAccessKey: appKey,
-        },
-      });
-
-      const command = new GetObjectCommand({
-        Bucket: bucket,
-        Key: storageKey,
-        ResponseContentType: file.mime_type || "application/octet-stream",
-        ResponseContentDisposition: formatContentDisposition("inline", file.file_name),
-      });
-
-      const inlineUrl = await getSignedUrl(s3, command, { expiresIn: 600 }); // 10 min preview
-      return NextResponse.redirect(inlineUrl, { status: 302 });
     }
 
     // Fallback to standard provider download url
-    const provider = getStorageProvider(storageProvider);
     const fallbackUrl = await provider.getDownloadUrl({
       key: storageKey,
       originalFilename: file.file_name,

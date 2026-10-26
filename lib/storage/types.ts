@@ -89,11 +89,11 @@ export interface StorageProvider {
   }): Promise<{ etag: string }>;
 
   /**
-   * Stream an object directly from storage (fallback for downloads when direct B2 is blocked).
+   * Stream an object directly from storage (avoids redirecting client to B2 when client network blocks B2).
    */
   getObjectStream?(params: {
     key: string;
-  }): Promise<{ stream: unknown; contentType?: string; contentLength?: number }>;
+  }): Promise<{ stream: ReadableStream | null; contentType?: string; contentLength?: number }>;
 
   /**
    * Permanently delete an object from storage.
