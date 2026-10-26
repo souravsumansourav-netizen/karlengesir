@@ -117,7 +117,68 @@ export function useUpload({ onNewSubject, onAllComplete, onError }: UseUploadOpt
     }
   }, [updateFile]);
 
-  // Upload single file via PUT with XMLHttpRequest for live progress
+  // Fallback: upload file via server proxy when direct B2 access is blocked by client network/ISP/adblocker
+  const uploadViaServerProxy = async (
+    entry: FileToUpload,
+    fileId: string,
+    storageKey: string,
+    storageProvider: string,
+    subjectId: string | null,
+    controller: AbortController
+  ) => {
+    const formData = new FormData();
+    formData.append("file", entry.file);
+    formData.append("fileId", fileId);
+    formData.append("storageKey", storageKey);
+    formData.append("storageProvider", storageProvider);
+    formData.append("fileName", entry.file.name);
+    formData.append("sizeBytes", String(entry.file.size));
+    formData.append("mimeType", entry.file.type || "application/octet-stream");
+    if (subjectId) formData.append("subjectId", subjectId);
+    if (uploaderName) formData.append("uploaderName", uploaderName);
+    if (description) formData.append("description", description);
+
+    await new Promise<void>((resolve, reject) => {
+      const xhr = new XMLHttpRequest();
+      xhr.open("POST", "/api/upload/proxy");
+
+      xhr.upload.onprogress = (e) => {
+        if (e.lengthComputable) {
+          const percent = Math.min(99, Math.round((e.loaded / e.total) * 100));
+          updateFile(entry.id, {
+            progress: percent,
+            bytesUploaded: e.loaded,
+          });
+        }
+      };
+
+      xhr.onload = () => {
+        if (xhr.status >= 200 && xhr.status < 300) {
+          resolve();
+        } else {
+          try {
+            const err = JSON.parse(xhr.responseText);
+            reject(new Error(err.error || `Proxy upload failed with status ${xhr.status}`));
+          } catch {
+            reject(new Error(`Proxy upload failed with status ${xhr.status}`));
+          }
+        }
+      };
+
+      xhr.onerror = () => reject(new Error("Network error during server proxy upload"));
+      xhr.onabort = () => reject(new Error("Upload cancelled by user"));
+
+      controller.signal.addEventListener("abort", () => {
+        xhr.abort();
+      });
+
+      xhr.send(formData);
+    });
+
+    updateFile(entry.id, { status: "done", progress: 100, bytesUploaded: entry.file.size });
+  };
+
+  // Upload single file via PUT with live progress; automatically falls back to server proxy if B2 is blocked
   const uploadSingle = async (
     entry: FileToUpload,
     uploadUrl: string,
@@ -127,6 +188,8 @@ export function useUpload({ onNewSubject, onAllComplete, onError }: UseUploadOpt
     subjectId: string | null,
     controller: AbortController
   ) => {
+    let uploadedViaProxy = false;
+
     await new Promise<void>((resolve, reject) => {
       const xhr = new XMLHttpRequest();
       xhr.open("PUT", uploadUrl);
@@ -142,16 +205,37 @@ export function useUpload({ onNewSubject, onAllComplete, onError }: UseUploadOpt
         }
       };
 
+      const handleFallback = async () => {
+        console.warn("Direct B2 upload failed/blocked, falling back to server proxy upload...");
+        try {
+          await uploadViaServerProxy(
+            entry,
+            fileId,
+            storageKey,
+            storageProvider,
+            subjectId,
+            controller
+          );
+          uploadedViaProxy = true;
+          resolve();
+        } catch (proxyErr: unknown) {
+          console.error("Direct B2 and server proxy uploads both failed:", proxyErr);
+          const detail = proxyErr instanceof Error ? proxyErr.message : String(proxyErr);
+          reject(new Error(`Upload failed: ${detail}`));
+        }
+      };
+
       xhr.onload = () => {
         if (xhr.status >= 200 && xhr.status < 300) {
           resolve();
         } else {
-          reject(new Error(`B2 upload failed with status ${xhr.status}: ${xhr.statusText}`));
+          // If direct upload to B2 returns non-2xx status, attempt server proxy upload
+          handleFallback();
         }
       };
 
       xhr.onerror = async () => {
-        console.warn("XHR upload encountered network error, attempting fetch fallback...");
+        // Attempt quick fetch fallback first
         try {
           const res = await fetch(uploadUrl, {
             method: "PUT",
@@ -167,22 +251,13 @@ export function useUpload({ onNewSubject, onAllComplete, onError }: UseUploadOpt
             resolve();
             return;
           }
-
-          const resText = await res.text().catch(() => "");
-          reject(
-            new Error(
-              `B2 upload failed with status ${res.status}: ${res.statusText} ${resText}`.trim()
-            )
-          );
-        } catch (fetchErr: unknown) {
-          console.error("Direct B2 upload error:", fetchErr);
-          const detail = fetchErr instanceof Error ? fetchErr.message : String(fetchErr);
-          reject(
-            new Error(
-              `Network error during direct upload to Backblaze B2 (${detail}). Ensure bucket CORS is configured and any ad-blockers allow backblazeb2.com.`
-            )
-          );
+        } catch {
+          // Direct fetch failed (likely ISP DNS block on B2 or ad-blocker)
         }
+
+        // Direct B2 connection is blocked on client's network/browser.
+        // Fall back seamlessly to server proxy upload:
+        await handleFallback();
       };
 
       xhr.onabort = () => reject(new Error("Upload cancelled by user"));
@@ -194,7 +269,12 @@ export function useUpload({ onNewSubject, onAllComplete, onError }: UseUploadOpt
       xhr.send(entry.file);
     });
 
-    // Notify backend to insert row into Supabase database
+    // If file was uploaded via server proxy, database record is already inserted!
+    if (uploadedViaProxy) {
+      return;
+    }
+
+    // Notify backend to insert row into Supabase database (for direct B2 upload)
     const completeRes = await fetch("/api/upload/complete", {
       method: "POST",
       headers: { "Content-Type": "application/json" },

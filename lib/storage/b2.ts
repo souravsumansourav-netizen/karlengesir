@@ -28,8 +28,8 @@ export class B2Provider implements StorageProvider {
     const keyId = process.env.B2_KEY_ID;
     const appKey = process.env.B2_APPLICATION_KEY;
     const bucket = process.env.B2_BUCKET;
-    let endpoint = process.env.B2_ENDPOINT || "s3.us-west-004.backblazeb2.com";
-    const region = process.env.B2_REGION || "us-west-004";
+    let endpoint = process.env.B2_ENDPOINT || "s3.us-east-005.backblazeb2.com";
+    const region = process.env.B2_REGION || "us-east-005";
 
     if (!keyId || !appKey || !bucket) {
       // In development or when testing without full credentials, warn
@@ -199,6 +199,42 @@ export class B2Provider implements StorageProvider {
     return await getSignedUrl(this.client, command, {
       expiresIn: expiresInSeconds,
     });
+  }
+
+  async uploadDirect({
+    key,
+    body,
+    contentType,
+  }: {
+    key: string;
+    body: Buffer | Uint8Array;
+    contentType?: string;
+  }): Promise<void> {
+    const command = new PutObjectCommand({
+      Bucket: this.bucket,
+      Key: key,
+      Body: body,
+      ContentType: contentType || "application/octet-stream",
+    });
+
+    await this.client.send(command);
+  }
+
+  async getObjectStream({
+    key,
+  }: {
+    key: string;
+  }): Promise<{ stream: unknown; contentType?: string; contentLength?: number }> {
+    const command = new GetObjectCommand({
+      Bucket: this.bucket,
+      Key: key,
+    });
+    const res = await this.client.send(command);
+    return {
+      stream: res.Body,
+      contentType: res.ContentType,
+      contentLength: res.ContentLength,
+    };
   }
 
   async deleteObject(key: string): Promise<void> {

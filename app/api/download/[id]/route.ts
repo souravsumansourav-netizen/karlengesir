@@ -35,17 +35,31 @@ export async function GET(
       console.warn("Error incrementing download count:", rpcErr);
     }
 
-    // 3. Generate presigned GET download URL with Content-Disposition = attachment
+    // 3. If proxy download is requested or provider supports streaming fallback, stream directly
     const storageKey = file.storage_key || file.storage_path || "";
     const storageProvider = file.storage_provider || "b2";
     const provider = getStorageProvider(storageProvider);
+
+    if (_request.nextUrl.searchParams.get("proxy") === "true" && provider.getObjectStream) {
+      const { stream, contentType, contentLength } = await provider.getObjectStream({ key: storageKey });
+      const { formatContentDisposition } = await import("@/lib/utils");
+      return new Response(stream as BodyInit, {
+        headers: {
+          "Content-Type": contentType || "application/octet-stream",
+          "Content-Disposition": formatContentDisposition("attachment", file.file_name),
+          ...(contentLength ? { "Content-Length": String(contentLength) } : {}),
+        },
+      });
+    }
+
+    // 4. Generate presigned GET download URL with Content-Disposition = attachment
     const downloadUrl = await provider.getDownloadUrl({
       key: storageKey,
       originalFilename: file.file_name,
       expiresInSeconds: 300, // 5 minutes expiry
     });
 
-    // 4. Redirect client to presigned download URL
+    // 5. Redirect client to presigned download URL
     return NextResponse.redirect(downloadUrl, { status: 302 });
   } catch (error: unknown) {
     console.error("Error in /api/download/[id]:", error);

@@ -70,6 +70,22 @@ export interface StorageProvider {
   }): Promise<string>;
 
   /**
+   * Directly upload a buffer/stream from the server to storage (fallback when browser direct upload is blocked).
+   */
+  uploadDirect?(params: {
+    key: string;
+    body: Buffer | Uint8Array;
+    contentType?: string;
+  }): Promise<void>;
+
+  /**
+   * Stream an object directly from storage (fallback for downloads when direct B2 is blocked).
+   */
+  getObjectStream?(params: {
+    key: string;
+  }): Promise<{ stream: unknown; contentType?: string; contentLength?: number }>;
+
+  /**
    * Permanently delete an object from storage.
    */
   deleteObject(key: string): Promise<void>;
@@ -79,3 +95,4 @@ export interface StorageProvider {
    */
   listStaleMultipartUploads(olderThanHours?: number): Promise<StaleMultipartUpload[]>;
 }
+
