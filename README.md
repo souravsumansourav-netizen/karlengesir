@@ -54,6 +54,12 @@ Operates **100% on free tiers with no credit card required**:
   - Inline preview for **Images, PDF documents, Audio (`.mp3`, `.wav`), and Video (`.mp4`, `.webm`)**.
   - Direct download with original filename preserved (`ResponseContentDisposition`).
   - Drag-and-drop multi-file upload with live byte-level progress bars and cancel buttons.
+- **Notes Board (`/board`)**:
+  - Anyone can type or paste text of any size (supports 10 MB+ without truncation) and save it as a card.
+  - Responsive masonry card board sorted newest first by `updated_at`.
+  - Fast one-click clipboard copy (with robust fallback for non-secure contexts).
+  - Modal full-view with whitespace preserved (`pre-wrap`), editing with instant re-ordering to top, and optimistic deletion with rollback.
+  - Automatic background list refresh when switching back to the browser tab.
 - **Admin (Supabase Auth)**:
   - `/admin/login` (email + password).
   - `/admin` dashboard with Backblaze B2 storage quota usage bar ("X GB of 9.5 GB used").
@@ -84,6 +90,10 @@ Operates **100% on free tiers with no credit card required**:
      ```sql
      insert into admins (user_id) values ('PASTE_USER_UID_HERE');
      ```
+5. Enable the Notes Board:
+   - Open **SQL Editor** in the Supabase dashboard.
+   - Paste the contents of `supabase/notes.sql` and click **Run**.
+   - This creates the `notes` table, newest-first index, and RLS policies (public read, server-only writes).
 
 ---
 

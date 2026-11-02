@@ -42,6 +42,10 @@ export function Navbar() {
         </Link>
 
         <nav className="navbar__nav">
+          <Link href="/board" className="nav-link">
+            Notes Board
+          </Link>
+
           {quotaText && (
             <span
               className="quota-pill"
