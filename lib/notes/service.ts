@@ -1,11 +1,9 @@
 import { createClient, SupabaseClient } from "@supabase/supabase-js";
-import { v4 as uuidv4 } from "uuid";
 import type { Note } from "./types";
 import * as fs from "fs";
 import * as path from "path";
 
-// In-memory / file fallback store used ONLY if the 'notes' table has not yet
-// been created in the Supabase schema cache (error code PGRST205).
+// Path to any local legacy fallback notes (used during initial development or migration)
 const FALLBACK_DIR = path.resolve(process.cwd(), ".next", "cache");
 const FALLBACK_FILE = path.join(FALLBACK_DIR, "notes-fallback.json");
 
@@ -21,14 +19,13 @@ function loadFallbackNotes(): Note[] {
   return [];
 }
 
-function saveFallbackNotes(notes: Note[]): void {
+function clearFallbackNotes(): void {
   try {
-    if (!fs.existsSync(FALLBACK_DIR)) {
-      fs.mkdirSync(FALLBACK_DIR, { recursive: true });
+    if (fs.existsSync(FALLBACK_FILE)) {
+      fs.unlinkSync(FALLBACK_FILE);
     }
-    fs.writeFileSync(FALLBACK_FILE, JSON.stringify(notes, null, 2), "utf-8");
   } catch (err) {
-    console.warn("[Notes Service] Could not write fallback notes file:", err);
+    console.warn("[Notes Service] Could not remove fallback notes file:", err);
   }
 }
 
@@ -45,7 +42,9 @@ export function getNotesAdminClient(): SupabaseClient {
       throw new Error("Missing NEXT_PUBLIC_SUPABASE_URL environment variable");
     }
     if (!serviceRoleKey) {
-      throw new Error("Missing SUPABASE_SERVICE_ROLE_KEY environment variable");
+      throw new Error(
+        "Missing Supabase API key (SUPABASE_SERVICE_ROLE_KEY or NEXT_PUBLIC_SUPABASE_ANON_KEY)"
+      );
     }
 
     _adminClient = createClient(supabaseUrl, serviceRoleKey, {
@@ -58,19 +57,43 @@ export function getNotesAdminClient(): SupabaseClient {
   return _adminClient;
 }
 
-function isFallbackNeeded(err: unknown): boolean {
-  if (err && typeof err === "object") {
-    const code = (err as { code?: string }).code;
-    const message = (err as { message?: string }).message;
-    if (
-      code === "PGRST205" ||
-      code === "42501" ||
-      (message && (message.includes("public.notes") || message.includes("row-level security")))
-    ) {
-      return true;
-    }
+function formatSupabaseError(error: { code?: string; message?: string }): string {
+  if (error.code === "42501" || error.message?.includes("row-level security")) {
+    return (
+      "Supabase Row-Level Security blocked this operation. " +
+      "Please run the updated SQL policies in supabase/notes.sql in your Supabase SQL Editor."
+    );
   }
-  return false;
+  if (error.code === "PGRST205") {
+    return (
+      "Table 'notes' does not exist in Supabase schema cache. " +
+      "Please run supabase/notes.sql in your Supabase SQL Editor."
+    );
+  }
+  return error.message || "Unknown database error";
+}
+
+/**
+ * Attempts to push any cached legacy fallback notes into Supabase.
+ */
+async function migrateFallbackNotesIfAny(supabase: SupabaseClient): Promise<void> {
+  const fallbackNotes = loadFallbackNotes();
+  if (!fallbackNotes || fallbackNotes.length === 0) return;
+
+  try {
+    for (const note of fallbackNotes) {
+      await supabase.from("notes").upsert({
+        id: note.id,
+        content: note.content,
+        created_at: note.created_at,
+        updated_at: note.updated_at,
+      });
+    }
+    clearFallbackNotes();
+    console.log("[Notes Service] Successfully migrated local fallback notes into Supabase.");
+  } catch {
+    // If Supabase write policies are not yet enabled, retain fallback file for future migration
+  }
 }
 
 /**
@@ -78,25 +101,38 @@ function isFallbackNeeded(err: unknown): boolean {
  */
 export async function getAllNotes(): Promise<Note[]> {
   const supabase = getNotesAdminClient();
+
+  // Try migrating any leftover fallback notes
+  await migrateFallbackNotesIfAny(supabase);
+
   const { data, error } = await supabase
     .from("notes")
     .select("id, content, created_at, updated_at")
     .order("updated_at", { ascending: false });
 
   if (error) {
-    if (isFallbackNeeded(error)) {
-      console.warn(
-        "[Notes Service] 'notes' table not found in Supabase. Using fallback store. Run supabase/notes.sql in Supabase SQL editor."
-      );
-      const notes = loadFallbackNotes();
-      return notes.sort(
+    if (error.code === "PGRST205") {
+      const fallback = loadFallbackNotes();
+      return fallback.sort(
         (a, b) => new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime()
       );
     }
-    throw new Error(`Failed to fetch notes: ${error.message}`);
+    throw new Error(formatSupabaseError(error));
   }
 
-  return (data as Note[]) || [];
+  const notes = (data as Note[]) || [];
+
+  // If Supabase has no records yet, surface any legacy cached notes so nothing is lost
+  if (notes.length === 0) {
+    const fallback = loadFallbackNotes();
+    if (fallback.length > 0) {
+      return fallback.sort(
+        (a, b) => new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime()
+      );
+    }
+  }
+
+  return notes;
 }
 
 /**
@@ -111,11 +147,12 @@ export async function getNoteById(id: string): Promise<Note | null> {
     .maybeSingle();
 
   if (error) {
-    if (isFallbackNeeded(error)) {
-      const notes = loadFallbackNotes();
-      return notes.find((n) => n.id === id) || null;
-    }
-    throw new Error(`Failed to fetch note by id: ${error.message}`);
+    throw new Error(formatSupabaseError(error));
+  }
+
+  if (!data) {
+    const fallback = loadFallbackNotes();
+    return fallback.find((n) => n.id === id) || null;
   }
 
   return (data as Note) || null;
@@ -139,22 +176,8 @@ export async function createNote(content: string): Promise<Note> {
     .single();
 
   if (error) {
-    if (isFallbackNeeded(error)) {
-      console.warn(
-        "[Notes Service] 'notes' table not found in Supabase. Using fallback store. Run supabase/notes.sql in Supabase SQL editor."
-      );
-      const newNote: Note = {
-        id: uuidv4(),
-        content,
-        created_at: now,
-        updated_at: now,
-      };
-      const notes = loadFallbackNotes();
-      notes.unshift(newNote);
-      saveFallbackNotes(notes);
-      return newNote;
-    }
-    throw new Error(`Failed to create note: ${error.message}`);
+    console.error("[Notes Service] Supabase createNote error:", error);
+    throw new Error(formatSupabaseError(error));
   }
 
   return data as Note;
@@ -178,23 +201,8 @@ export async function updateNote(id: string, content: string): Promise<Note> {
     .single();
 
   if (error) {
-    if (isFallbackNeeded(error)) {
-      const notes = loadFallbackNotes();
-      const index = notes.findIndex((n) => n.id === id);
-      if (index === -1) {
-        throw new Error("Note not found");
-      }
-      const updatedNote: Note = {
-        ...notes[index],
-        content,
-        updated_at: now,
-      };
-      notes.splice(index, 1);
-      notes.unshift(updatedNote);
-      saveFallbackNotes(notes);
-      return updatedNote;
-    }
-    throw new Error(`Failed to update note: ${error.message}`);
+    console.error("[Notes Service] Supabase updateNote error:", error);
+    throw new Error(formatSupabaseError(error));
   }
 
   return data as Note;
@@ -208,13 +216,8 @@ export async function deleteNote(id: string): Promise<boolean> {
   const { error } = await supabase.from("notes").delete().eq("id", id);
 
   if (error) {
-    if (isFallbackNeeded(error)) {
-      const notes = loadFallbackNotes();
-      const filtered = notes.filter((n) => n.id !== id);
-      saveFallbackNotes(filtered);
-      return true;
-    }
-    throw new Error(`Failed to delete note: ${error.message}`);
+    console.error("[Notes Service] Supabase deleteNote error:", error);
+    throw new Error(formatSupabaseError(error));
   }
 
   return true;

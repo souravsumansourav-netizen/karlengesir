@@ -12,7 +12,16 @@ export const maxDuration = 60;
 export async function GET() {
   try {
     const notes = await getAllNotes();
-    return NextResponse.json({ notes });
+    return NextResponse.json(
+      { notes },
+      {
+        headers: {
+          "Cache-Control": "no-store, no-cache, must-revalidate, proxy-revalidate",
+          Pragma: "no-cache",
+          Expires: "0",
+        },
+      }
+    );
   } catch (error: unknown) {
     console.error("Error in GET /api/notes:", error);
     const message = error instanceof Error ? error.message : "Failed to fetch notes";

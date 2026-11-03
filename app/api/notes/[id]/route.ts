@@ -25,7 +25,16 @@ export async function GET(
       return NextResponse.json({ error: "Note not found" }, { status: 404 });
     }
 
-    return NextResponse.json({ note });
+    return NextResponse.json(
+      { note },
+      {
+        headers: {
+          "Cache-Control": "no-store, no-cache, must-revalidate, proxy-revalidate",
+          Pragma: "no-cache",
+          Expires: "0",
+        },
+      }
+    );
   } catch (error: unknown) {
     console.error("Error in GET /api/notes/[id]:", error);
     const message = error instanceof Error ? error.message : "Failed to fetch note";

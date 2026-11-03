@@ -21,6 +21,7 @@ export function useNotes() {
 
     try {
       const res = await fetch("/api/notes", {
+        cache: "no-store",
         headers: {
           "Cache-Control": "no-cache",
         },
@@ -57,7 +58,7 @@ export function useNotes() {
     fetchNotes(false);
   }, [fetchNotes]);
 
-  // Refresh list when browser tab regains focus or visibility
+  // Refresh list when browser tab regains focus or visibility, plus periodic sync for multi-device updates
   useEffect(() => {
     const handleFocus = () => {
       fetchNotes(true);
@@ -72,9 +73,17 @@ export function useNotes() {
     window.addEventListener("focus", handleFocus);
     document.addEventListener("visibilitychange", handleVisibilityChange);
 
+    // Multi-device sync: poll every 12s when document is visible
+    const interval = setInterval(() => {
+      if (document.visibilityState === "visible") {
+        fetchNotes(true);
+      }
+    }, 12000);
+
     return () => {
       window.removeEventListener("focus", handleFocus);
       document.removeEventListener("visibilitychange", handleVisibilityChange);
+      clearInterval(interval);
     };
   }, [fetchNotes]);
 
