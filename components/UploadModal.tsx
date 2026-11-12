@@ -127,12 +127,9 @@ export function UploadModal({ subjects, onClose, onSuccess, onNewSubject }: Uplo
     e.target.value = "";
   };
 
+  // Subject is now optional (non-mandatory)
   const handleUploadSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!selectedSubjectId && (!isCreatingSubject || !newSubjectName.trim())) {
-      toast.error("Please select or create a subject for the uploaded files.");
-      return;
-    }
     if (pendingCount === 0) return;
     await startUpload();
   };
@@ -143,23 +140,27 @@ export function UploadModal({ subjects, onClose, onSuccess, onNewSubject }: Uplo
       role="dialog"
       aria-modal="true"
       aria-labelledby="modal-title"
+      onClick={(e) => {
+        if (e.target === e.currentTarget && !isUploading) onClose();
+      }}
     >
-      <div className="modal">
+      <div className="modal modal-panel upload-modal">
         {/* Header */}
         <div className="modal__header">
-          <div>
+          <div style={{ minWidth: 0, flex: 1 }}>
             <h2 id="modal-title" className="modal__title">
               Upload Files
             </h2>
             <p className="modal__subtitle">
-              Fast, direct Backblaze B2 storage with support for files up to {formatBytes(MAX_FILE_SIZE_BYTES)}
+              Fast, direct Backblaze B2 storage up to {formatBytes(MAX_FILE_SIZE_BYTES)}
             </p>
           </div>
           <button
             type="button"
-            className="icon-btn"
+            className="icon-btn modal-close-btn"
             onClick={onClose}
             aria-label="Close upload modal"
+            disabled={isUploading}
           >
             ✕
           </button>
@@ -174,7 +175,7 @@ export function UploadModal({ subjects, onClose, onSuccess, onNewSubject }: Uplo
             <span className="quota-bar__stat">
               {quota.loading
                 ? "Checking storage…"
-                : `${quota.formattedUsed} of ${quota.formattedQuota} used (${quota.percentUsed}%)`}
+                : `${quota.formattedUsed} of ${quota.formattedQuota} (${quota.percentUsed}%)`}
             </span>
           </div>
           <div className="quota-bar__track">
@@ -187,7 +188,7 @@ export function UploadModal({ subjects, onClose, onSuccess, onNewSubject }: Uplo
           </div>
         </div>
 
-        {/* Drop zone */}
+        {/* Drop zone / Tap to browse */}
         <div
           className={`drop-zone ${dragging ? "drop-zone--active" : ""}`}
           onDragOver={handleDragOver}
@@ -209,11 +210,11 @@ export function UploadModal({ subjects, onClose, onSuccess, onNewSubject }: Uplo
           />
           <div className="drop-zone__icon">📂</div>
           <p className="drop-zone__text">
-            Drag & drop files here, or <span className="link-text">click to browse</span>
+            <span className="desktop-only-inline">Drag & drop files here, or </span>
+            <span className="link-text">tap to select files</span>
           </p>
           <p className="drop-zone__hint">
-            Any file type accepted (PDF, Office, Images, Videos, Archives) · Max{" "}
-            {formatBytes(MAX_FILE_SIZE_BYTES, 0)} per file
+            PDF, Docs, Images, Videos, Archives · Max {formatBytes(MAX_FILE_SIZE_BYTES, 0)} per file
           </p>
         </div>
 
@@ -262,6 +263,7 @@ export function UploadModal({ subjects, onClose, onSuccess, onNewSubject }: Uplo
                         className="icon-btn icon-btn--sm"
                         onClick={() => removeFile(f.id)}
                         title="Remove file"
+                        aria-label="Remove file"
                       >
                         ✕
                       </button>
@@ -289,11 +291,11 @@ export function UploadModal({ subjects, onClose, onSuccess, onNewSubject }: Uplo
 
         {/* Metadata Form */}
         <form onSubmit={handleUploadSubmit} className="modal__form">
-          {/* Subject selection (Required) */}
+          {/* Subject selection (Optional / Non-mandatory) */}
           <div className="form-group">
             <div className="form-group__header">
               <label htmlFor="subject-select" className="form-label">
-                Subject <span className="text-danger">*</span>
+                Subject <span className="text-muted font-normal">(optional)</span>
               </label>
               <button
                 type="button"
@@ -301,6 +303,7 @@ export function UploadModal({ subjects, onClose, onSuccess, onNewSubject }: Uplo
                 onClick={() => {
                   setIsCreatingSubject((v) => !v);
                   setSelectedSubjectId("");
+                  setNewSubjectName("");
                 }}
               >
                 {isCreatingSubject ? "Choose existing" : "+ New subject"}
@@ -314,7 +317,6 @@ export function UploadModal({ subjects, onClose, onSuccess, onNewSubject }: Uplo
                 placeholder="e.g. Machine Learning, Physics 101…"
                 value={newSubjectName}
                 onChange={(e) => setNewSubjectName(e.target.value)}
-                required
                 maxLength={60}
                 autoFocus
               />
@@ -324,9 +326,8 @@ export function UploadModal({ subjects, onClose, onSuccess, onNewSubject }: Uplo
                 className="form-select"
                 value={selectedSubjectId}
                 onChange={(e) => setSelectedSubjectId(e.target.value)}
-                required
               >
-                <option value="">— Select a subject —</option>
+                <option value="">— None / General (optional) —</option>
                 {subjects.map((s) => (
                   <option key={s.id} value={s.id}>
                     {s.name}

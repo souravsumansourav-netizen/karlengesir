@@ -738,3 +738,107 @@
   background: rgba(255, 255, 255, 0.3);
 }
 
+/* ── Mobile / MWeb Responsiveness ── */
+@media (max-width: 640px) {
+  .boardContainer {
+    padding: 1rem 0.75rem 3rem 0.75rem;
+    gap: 1.5rem;
+  }
+
+  .boardTitle {
+    font-size: 1.75rem;
+  }
+
+  .boardSubtitle {
+    font-size: 0.9rem;
+  }
+
+  .inputCard {
+    padding: 1rem;
+    border-radius: var(--r-lg);
+  }
+
+  .noteTextarea,
+  .editTextarea {
+    font-size: 16px; /* Prevents auto-zoom on iOS Safari */
+    min-height: 100px;
+  }
+
+  .inputFooter {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 0.75rem;
+  }
+
+  .inputStats {
+    display: flex;
+    justify-content: space-between;
+    width: 100%;
+  }
+
+  .inputActions {
+    display: flex;
+    gap: 0.5rem;
+    width: 100%;
+  }
+
+  .attachBtn,
+  .saveBtn {
+    flex: 1;
+    justify-content: center;
+    padding: 0.75rem 1rem;
+    min-height: 44px;
+    font-size: 0.9rem;
+  }
+
+  /* Note Modal on Mobile */
+  .modalOverlay {
+    padding: 0;
+    align-items: flex-end;
+  }
+
+  .modalPanel {
+    max-width: 100%;
+    width: 100%;
+    border-radius: var(--r-xl) var(--r-xl) 0 0;
+    border-bottom: none;
+    border-left: none;
+    border-right: none;
+    max-height: 92dvh;
+    box-shadow: 0 -8px 32px rgba(0, 0, 0, 0.6);
+  }
+
+  .modalHeader {
+    padding: 0.875rem 1rem;
+  }
+
+  .modalBody {
+    padding: 1rem;
+    min-height: 150px;
+    max-height: 58dvh;
+  }
+
+  .modalFooter {
+    padding: 0.875rem 1rem;
+    flex-direction: column-reverse;
+    gap: 0.5rem;
+  }
+
+  .modalActionsLeft,
+  .modalActionsRight {
+    width: 100%;
+    display: flex;
+    gap: 0.5rem;
+  }
+
+  .modalActionsLeft .btn,
+  .modalActionsLeft .actionBtn,
+  .modalActionsLeft .saveBtn,
+  .modalActionsRight .actionBtn {
+    flex: 1;
+    justify-content: center;
+    min-height: 42px;
+  }
+}
+
+
