@@ -3,6 +3,7 @@
 import { useState, MouseEvent } from "react";
 import type { Note } from "@/lib/notes/types";
 import { copyTextToClipboard } from "@/lib/notes/clipboard";
+import { NoteContent } from "./NoteContent";
 import toast from "react-hot-toast";
 import styles from "./notes.module.css";
 
@@ -43,7 +44,7 @@ export function NoteCard({ note, onClick, onDelete }: NoteCardProps) {
 
   const handleCopy = async (e: MouseEvent) => {
     e.stopPropagation();
-    // Copy the ENTIRE note text, never the preview
+    // Copy the ENTIRE note text / rich table, never the preview
     const success = await copyTextToClipboard(note.content);
     if (success) {
       setCopied(true);
@@ -84,8 +85,10 @@ export function NoteCard({ note, onClick, onDelete }: NoteCardProps) {
       }}
       aria-label="View full note"
     >
-      {/* Clipped visually with CSS only, never by cutting the data in memory/DOM */}
-      <div className={styles.cardPreview}>{note.content}</div>
+      {/* Rich note preview: supports text, tables, and images */}
+      <div className={styles.cardPreview}>
+        <NoteContent content={note.content} mode="preview" />
+      </div>
 
       <div className={styles.cardFooter}>
         <span
@@ -107,7 +110,10 @@ export function NoteCard({ note, onClick, onDelete }: NoteCardProps) {
           </button>
 
           {confirmDelete ? (
-            <div className={styles.confirmDeleteWrap} onClick={(e) => e.stopPropagation()}>
+            <div
+              className={styles.confirmDeleteWrap}
+              onClick={(e) => e.stopPropagation()}
+            >
               <span className={styles.confirmText}>Delete?</span>
               <button
                 type="button"

@@ -437,3 +437,304 @@
     opacity: 1;
   }
 }
+
+/* ── Rich Notes: Tabular Data (Excel/Markdown), Images, and Editor ── */
+
+.inputCardDragging {
+  border-color: var(--accent) !important;
+  background: var(--accent-dim) !important;
+  box-shadow: var(--glow) !important;
+}
+
+.inputActions {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.attachBtn {
+  background: var(--bg-secondary);
+  border: 1px solid var(--border);
+  color: var(--text-secondary);
+  padding: 0.6rem 1rem;
+  border-radius: var(--r-md);
+  font-size: 0.85rem;
+  font-weight: 500;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  transition: all var(--duration) var(--ease);
+}
+
+.attachBtn:hover:not(:disabled) {
+  border-color: var(--accent);
+  color: var(--text-primary);
+  background: var(--card-hover);
+}
+
+.attachBtn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.imageCountBadge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  color: var(--accent);
+  font-weight: 500;
+  margin-left: 0.5rem;
+}
+
+.attachedImagesStrip {
+  display: flex;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+  margin-top: 0.75rem;
+  padding-top: 0.75rem;
+  border-top: 1px dashed var(--border);
+}
+
+.attachedImageItem {
+  position: relative;
+  width: 76px;
+  height: 76px;
+  border-radius: var(--r-md);
+  overflow: hidden;
+  border: 1px solid var(--border);
+  background: var(--bg-secondary);
+  flex-shrink: 0;
+}
+
+.attachedImageThumb {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+.removeImageBtn {
+  position: absolute;
+  top: 3px;
+  right: 3px;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background: rgba(0, 0, 0, 0.75);
+  color: #ffffff;
+  border: none;
+  font-size: 11px;
+  line-height: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: background 0.15s ease;
+  z-index: 2;
+}
+
+.removeImageBtn:hover {
+  background: var(--danger);
+}
+
+.attachedImageName {
+  display: none;
+}
+
+.editWrap {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  width: 100%;
+}
+
+.cardContentWrap {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  width: 100%;
+}
+
+.fullContentWrap {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+  width: 100%;
+}
+
+.cardText {
+  color: var(--text-primary);
+  font-size: 0.925rem;
+  line-height: 1.55;
+  white-space: pre-wrap;
+  word-break: break-word;
+  overflow: hidden;
+  display: -webkit-box;
+  -webkit-line-clamp: 6;
+  -webkit-box-orient: vertical;
+}
+
+.modalNoteContent {
+  user-select: text;
+  width: 100%;
+}
+
+/* ── Tables (Excel / Markdown / TSV) ── */
+.tableWrapper {
+  width: 100%;
+  overflow-x: auto;
+  margin: 0.75rem 0;
+  border-radius: var(--r-md);
+  border: 1px solid var(--border);
+  background: var(--bg-secondary);
+  -webkit-overflow-scrolling: touch;
+}
+
+.cardTableWrapper {
+  width: 100%;
+  overflow-x: auto;
+  max-height: 180px;
+  margin: 0.4rem 0;
+  border-radius: var(--r-sm);
+  border: 1px solid var(--border);
+  background: var(--bg-secondary);
+  -webkit-overflow-scrolling: touch;
+}
+
+.noteTable {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.85rem;
+  line-height: 1.45;
+  text-align: left;
+  min-width: 100%;
+}
+
+.noteTable th {
+  background: rgba(255, 255, 255, 0.05);
+  color: var(--text-primary);
+  font-weight: 600;
+  padding: 0.55rem 0.8rem;
+  border-bottom: 2px solid var(--border-active);
+  border-right: 1px solid var(--border);
+  white-space: nowrap;
+}
+
+.noteTable th:last-child {
+  border-right: none;
+}
+
+.noteTable td {
+  padding: 0.45rem 0.8rem;
+  color: var(--text-secondary);
+  border-bottom: 1px solid var(--border);
+  border-right: 1px solid var(--border);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.noteTable td:last-child {
+  border-right: none;
+}
+
+.noteTable tbody tr:last-child td {
+  border-bottom: none;
+}
+
+.noteTable tbody tr:nth-child(even) {
+  background: rgba(255, 255, 255, 0.02);
+}
+
+.noteTable tbody tr:hover {
+  background: rgba(99, 102, 241, 0.08);
+}
+
+/* ── Images ── */
+.cardImageWrapper {
+  width: 100%;
+  margin: 0.4rem 0;
+  border-radius: var(--r-md);
+  overflow: hidden;
+  border: 1px solid var(--border);
+  background: var(--bg-secondary);
+  max-height: 200px;
+}
+
+.cardImagePreview {
+  width: 100%;
+  max-height: 200px;
+  object-fit: cover;
+  display: block;
+}
+
+.modalImageWrapper {
+  width: 100%;
+  margin: 0.75rem 0;
+  border-radius: var(--r-md);
+  overflow: hidden;
+  border: 1px solid var(--border);
+  background: var(--bg-secondary);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+}
+
+.modalImage {
+  max-width: 100%;
+  max-height: 65vh;
+  object-fit: contain;
+  display: block;
+  cursor: zoom-in;
+  transition: transform 0.2s ease;
+}
+
+.modalImage:hover {
+  transform: scale(1.01);
+}
+
+/* ── Lightbox Zoom Overlay ── */
+.lightboxOverlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.92);
+  z-index: 1000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1.5rem;
+  cursor: zoom-out;
+  animation: fadeIn 150ms ease;
+}
+
+.lightboxImage {
+  max-width: 95vw;
+  max-height: 95vh;
+  object-fit: contain;
+  border-radius: var(--r-md);
+  box-shadow: var(--shadow-lg);
+  cursor: default;
+}
+
+.lightboxCloseBtn {
+  position: absolute;
+  top: 1.5rem;
+  right: 1.5rem;
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.15);
+  color: #ffffff;
+  border: 1px solid rgba(255, 255, 255, 0.25);
+  font-size: 1.25rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: background 0.15s ease;
+}
+
+.lightboxCloseBtn:hover {
+  background: rgba(255, 255, 255, 0.3);
+}
+
