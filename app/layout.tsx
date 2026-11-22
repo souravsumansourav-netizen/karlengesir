@@ -31,7 +31,11 @@ export default function RootLayout({
               style: {
                 background: "var(--card-bg)",
                 color: "var(--text-primary)",
-                border: "1px solid var(--border)",
+                border: "0.5px solid var(--border)",
+                borderRadius: "16px",
+                boxShadow: "var(--shadow-lg)",
+                fontSize: "0.9rem",
+                letterSpacing: "-0.01em",
               },
             }}
           />

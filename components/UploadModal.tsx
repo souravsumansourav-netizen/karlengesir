@@ -1,7 +1,8 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { useUpload } from "@/hooks/useUpload";
+import { useUpload, type FileToUpload } from "@/hooks/useUpload";
+import { FileIcon } from "@/components/FileIcon";
 import type { SubjectRow } from "@/lib/database.types";
 import { MAX_FILE_SIZE_BYTES } from "@/lib/constants";
 import { formatBytes } from "@/lib/utils";
@@ -21,6 +22,92 @@ interface QuotaState {
   formattedUsed: string;
   formattedQuota: string;
   loading: boolean;
+}
+
+type StatusTone = "ready" | "queued" | "active" | "done" | "error" | "cancelled";
+
+interface StatusInfo {
+  tone: StatusTone;
+  label: string;
+  detail: string;
+  indeterminate?: boolean;
+}
+
+/** Derive a human-readable status for every file so no state is ever "unknown". */
+function getStatus(f: FileToUpload, batchRunning: boolean): StatusInfo {
+  const size = formatBytes(f.file.size);
+  switch (f.status) {
+    case "pending":
+      return batchRunning
+        ? { tone: "queued", label: "Waiting", detail: size }
+        : { tone: "ready", label: "Ready", detail: size };
+    case "uploading":
+      if (f.bytesUploaded === 0 && f.progress === 0) {
+        return { tone: "active", label: "Preparing", detail: size, indeterminate: true };
+      }
+      if (f.progress >= 98) {
+        return { tone: "active", label: "Finalizing", detail: size, indeterminate: true };
+      }
+      return {
+        tone: "active",
+        label: `Uploading ${f.progress}%`,
+        detail: `${formatBytes(f.bytesUploaded)} of ${size}`,
+      };
+    case "done":
+      return { tone: "done", label: "Uploaded", detail: size };
+    case "cancelled":
+      return { tone: "cancelled", label: "Cancelled", detail: size };
+    case "error":
+    default:
+      return { tone: "error", label: "Failed", detail: size };
+  }
+}
+
+function StatusGlyph({ tone }: { tone: StatusTone }) {
+  const common = { width: 14, height: 14, viewBox: "0 0 16 16", "aria-hidden": true as const, className: "status-glyph" };
+  switch (tone) {
+    case "done":
+      return (
+        <svg {...common}>
+          <circle cx="8" cy="8" r="8" fill="currentColor" />
+          <path d="M4.6 8.3l2.2 2.2 4.6-4.9" fill="none" stroke="#fff" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" />
+        </svg>
+      );
+    case "error":
+      return (
+        <svg {...common}>
+          <circle cx="8" cy="8" r="8" fill="currentColor" />
+          <path d="M8 4.4v4.2M8 11.2v.1" stroke="#fff" strokeWidth="1.8" strokeLinecap="round" />
+        </svg>
+      );
+    case "cancelled":
+      return (
+        <svg {...common}>
+          <circle cx="8" cy="8" r="8" fill="currentColor" />
+          <path d="M5.2 8h5.6" stroke="#fff" strokeWidth="1.8" strokeLinecap="round" />
+        </svg>
+      );
+    case "active":
+      return (
+        <svg {...common} className="status-glyph status-glyph--spin">
+          <circle cx="8" cy="8" r="6.2" fill="none" stroke="currentColor" strokeOpacity="0.25" strokeWidth="2" />
+          <path d="M8 1.8a6.2 6.2 0 0 1 6.2 6.2" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+        </svg>
+      );
+    case "queued":
+      return (
+        <svg {...common}>
+          <circle cx="8" cy="8" r="6.2" fill="none" stroke="currentColor" strokeWidth="1.6" />
+          <path d="M8 4.6V8l2.2 1.4" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
+        </svg>
+      );
+    default:
+      return (
+        <svg {...common}>
+          <circle cx="8" cy="8" r="6.2" fill="none" stroke="currentColor" strokeWidth="1.6" />
+        </svg>
+      );
+  }
 }
 
 export function UploadModal({ subjects, onClose, onSuccess, onNewSubject }: UploadModalProps) {
@@ -169,9 +256,7 @@ export function UploadModal({ subjects, onClose, onSuccess, onNewSubject }: Uplo
         {/* Free-tier Storage Quota Usage Bar */}
         <div className="quota-bar-wrapper">
           <div className="quota-bar__header">
-            <span className="quota-bar__label">
-              💾 Storage Quota (Free Tier)
-            </span>
+            <span className="quota-bar__label">Storage</span>
             <span className="quota-bar__stat">
               {quota.loading
                 ? "Checking storage…"
@@ -234,58 +319,71 @@ export function UploadModal({ subjects, onClose, onSuccess, onNewSubject }: Uplo
               )}
             </div>
 
-            {files.map((f) => (
-              <div key={f.id} className={`file-item file-item--${f.status}`}>
-                <div className="file-item__info">
-                  <div style={{ minWidth: 0, flex: 1 }}>
-                    <span className="file-item__name truncate">{f.file.name}</span>
-                    <span className="file-item__size">
-                      {f.status === "uploading"
-                        ? `${formatBytes(f.bytesUploaded)} / ${formatBytes(f.file.size)} (${f.progress}%)`
-                        : formatBytes(f.file.size)}
-                    </span>
+            {files.map((f) => {
+              const st = getStatus(f, isUploading);
+              return (
+                <div key={f.id} className={`file-item file-item--${f.status}`}>
+                  <div className="file-item__info">
+                    <div className="file-item__glyph" aria-hidden="true">
+                      <FileIcon mimeType={f.file.type || null} />
+                    </div>
+
+                    <div className="file-item__main">
+                      <span className="file-item__name truncate">{f.file.name}</span>
+                      <span className={`file-item__status file-item__status--${st.tone}`} aria-live="polite">
+                        <StatusGlyph tone={st.tone} />
+                        <span>{st.label}</span>
+                        <span className="file-item__dot">·</span>
+                        <span className="file-item__size">{st.detail}</span>
+                      </span>
+                    </div>
+
+                    <div className="file-item__actions">
+                      {f.status === "uploading" && (
+                        <button
+                          type="button"
+                          className="btn btn--danger btn--sm"
+                          onClick={() => cancelUpload(f.id)}
+                          title="Cancel upload"
+                        >
+                          Cancel
+                        </button>
+                      )}
+                      {(f.status === "pending" || f.status === "error" || f.status === "cancelled") && (
+                        <button
+                          type="button"
+                          className="icon-btn icon-btn--sm"
+                          onClick={() => removeFile(f.id)}
+                          title="Remove file"
+                          aria-label={`Remove ${f.file.name}`}
+                          disabled={f.status === "pending" && isUploading}
+                        >
+                          ✕
+                        </button>
+                      )}
+                    </div>
                   </div>
 
-                  <div className="file-item__actions">
-                    {f.status === "uploading" && (
-                      <button
-                        type="button"
-                        className="btn btn--danger btn--sm"
-                        onClick={() => cancelUpload(f.id)}
-                        title="Cancel upload"
-                      >
-                        Cancel
-                      </button>
-                    )}
-                    {f.status === "pending" && (
-                      <button
-                        type="button"
-                        className="icon-btn icon-btn--sm"
-                        onClick={() => removeFile(f.id)}
-                        title="Remove file"
-                        aria-label="Remove file"
-                      >
-                        ✕
-                      </button>
-                    )}
-                    {f.status === "done" && <span className="badge badge--success">✓ Done</span>}
-                    {f.status === "cancelled" && <span className="badge badge--warning">Cancelled</span>}
-                    {f.status === "error" && <span className="badge badge--danger">Failed</span>}
-                  </div>
-                </div>
-
-                {f.status === "uploading" && (
-                  <div className="progress-bar">
+                  {f.status === "uploading" && (
                     <div
-                      className="progress-bar__fill"
-                      style={{ width: `${f.progress}%` }}
-                    />
-                  </div>
-                )}
+                      className={`progress-bar ${st.indeterminate ? "progress-bar--indeterminate" : ""}`}
+                      role="progressbar"
+                      aria-valuemin={0}
+                      aria-valuemax={100}
+                      aria-valuenow={st.indeterminate ? undefined : f.progress}
+                      aria-label={`${f.file.name} upload progress`}
+                    >
+                      <div
+                        className="progress-bar__fill"
+                        style={st.indeterminate ? undefined : { width: `${f.progress}%` }}
+                      />
+                    </div>
+                  )}
 
-                {f.error && <p className="file-item__error">{f.error}</p>}
-              </div>
-            ))}
+                  {f.error && f.status !== "cancelled" && <p className="file-item__error">{f.error}</p>}
+                </div>
+              );
+            })}
           </div>
         )}
 
