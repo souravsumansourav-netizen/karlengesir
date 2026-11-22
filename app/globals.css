@@ -1883,3 +1883,60 @@ body {
 /* Keep sections of the sheet from being squashed by the flex column */
 .modal > *, .modal-panel > * { flex-shrink: 0; }
 .file-queue { flex-shrink: 0; min-height: 0; }
+
+/* ── Hero: colorful Apple mesh gradient (full-bleed) ── */
+html, body { overflow-x: clip; }
+
+.hero {
+  position: relative;
+  isolation: isolate;
+  padding: 6rem 0 5rem;
+}
+.hero > * { position: relative; z-index: 1; }
+
+.hero::before {
+  content: "";
+  position: absolute;
+  z-index: -1;
+  top: calc(var(--sp-8) * -1);
+  bottom: -1px;
+  left: 50%;
+  width: 100vw;
+  transform: translateX(-50%);
+  background:
+    radial-gradient(55% 70% at 4% 65%,  rgba(178, 132, 255, 1) 0%, transparent 72%),
+    radial-gradient(48% 62% at 36% 98%, rgba(255, 105, 235, 1) 0%, transparent 72%),
+    radial-gradient(52% 70% at 72% 78%, rgba(255, 168, 64, 0.95) 0%, transparent 72%),
+    radial-gradient(48% 75% at 100% 40%, rgba(255, 214, 90, 1) 0%, transparent 72%),
+    radial-gradient(50% 45% at 50% 6%,  rgba(255, 190, 160, 0.55) 0%, transparent 72%),
+    var(--bg);
+  filter: saturate(1.15);
+  -webkit-mask-image: linear-gradient(to bottom, transparent 0, #000 14%, #000 82%, transparent 100%);
+          mask-image: linear-gradient(to bottom, transparent 0, #000 14%, #000 82%, transparent 100%);
+  animation: meshDrift 22s ease-in-out infinite alternate;
+}
+[data-theme="dark"] .hero::before,
+:root:not([data-theme="light"]) .hero::before { opacity: 0.55; }
+
+@keyframes meshDrift {
+  from { background-position: 0% 0%, 0% 0%, 0% 0%, 0% 0%, 0% 0%, 0 0; transform: translateX(-50%) scale(1); }
+  to   { transform: translateX(-50%) scale(1.06); }
+}
+
+.hero__eyebrow { color: var(--text-primary); font-weight: 600; font-size: 1.15rem; letter-spacing: -0.02em; }
+.hero__title {
+  background: none;
+  -webkit-text-fill-color: currentColor;
+  color: var(--text-primary);
+  font-weight: 700;
+  letter-spacing: -0.05em;
+  line-height: 1.02;
+  font-size: clamp(2.6rem, 8vw, 5.5rem);
+}
+.hero__subtitle { color: var(--text-primary); opacity: 0.72; }
+.hero .btn--primary { background: var(--text-primary); color: var(--bg); }
+.hero .btn--primary:hover:not(:disabled) { background: var(--text-primary); opacity: 0.85; }
+.hero .btn--ghost { background: var(--material); backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px); color: var(--text-primary); }
+
+@media (max-width: 640px) { .hero { padding: 3.5rem 0 3rem; } }
+@media (prefers-reduced-motion: reduce) { .hero::before { animation: none; } }
