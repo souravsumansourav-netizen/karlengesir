@@ -1,11 +1,21 @@
 import { createClient } from "@supabase/supabase-js";
 import type { Database } from "../database.types";
+import { getEnvVar } from "../env";
 
 // Server-only Supabase client with service-role permissions
 // Bypasses RLS to insert validated file records and manage admin tasks
 export function createAdminClient() {
-  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
-  const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  const supabaseUrl = getEnvVar(
+    "NEXT_PUBLIC_SUPABASE_URL",
+    "SUPABASE_URL"
+  );
+  const serviceRoleKey = getEnvVar(
+    "SUPABASE_SERVICE_ROLE_KEY",
+    "SUPABASE_SERVICE_KEY",
+    "SUPABASE_SECRET_KEY",
+    "SUPABASE_ADMIN_KEY",
+    "SERVICE_ROLE_KEY"
+  );
 
   if (!supabaseUrl) {
     throw new Error("Missing NEXT_PUBLIC_SUPABASE_URL environment variable");
@@ -24,3 +34,6 @@ export function createAdminClient() {
     },
   });
 }
+
+// Lazy getter function for request-time access
+export const getSupabaseAdmin = createAdminClient;

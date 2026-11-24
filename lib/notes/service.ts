@@ -1,4 +1,5 @@
 import { createClient, SupabaseClient } from "@supabase/supabase-js";
+import { getEnvVar } from "../env";
 import type { Note } from "./types";
 import * as fs from "fs";
 import * as path from "path";
@@ -61,32 +62,33 @@ function clearFallbackNotes(): void {
   }
 }
 
-let _adminClient: SupabaseClient | null = null;
-
 export function getNotesAdminClient(): SupabaseClient {
-  if (!_adminClient) {
-    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
-    const serviceRoleKey =
-      process.env.SUPABASE_SERVICE_ROLE_KEY ||
-      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+  const supabaseUrl = getEnvVar("NEXT_PUBLIC_SUPABASE_URL", "SUPABASE_URL");
+  const serviceRoleKey = getEnvVar(
+    "SUPABASE_SERVICE_ROLE_KEY",
+    "SUPABASE_SERVICE_KEY",
+    "SUPABASE_SECRET_KEY",
+    "SUPABASE_ADMIN_KEY",
+    "SERVICE_ROLE_KEY",
+    "NEXT_PUBLIC_SUPABASE_ANON_KEY",
+    "SUPABASE_ANON_KEY"
+  );
 
-    if (!supabaseUrl) {
-      throw new Error("Missing NEXT_PUBLIC_SUPABASE_URL environment variable");
-    }
-    if (!serviceRoleKey) {
-      throw new Error(
-        "Missing Supabase API key (SUPABASE_SERVICE_ROLE_KEY or NEXT_PUBLIC_SUPABASE_ANON_KEY)"
-      );
-    }
-
-    _adminClient = createClient(supabaseUrl, serviceRoleKey, {
-      auth: {
-        persistSession: false,
-        autoRefreshToken: false,
-      },
-    });
+  if (!supabaseUrl) {
+    throw new Error("Missing NEXT_PUBLIC_SUPABASE_URL environment variable");
   }
-  return _adminClient;
+  if (!serviceRoleKey) {
+    throw new Error(
+      "Missing Supabase API key (SUPABASE_SERVICE_ROLE_KEY or NEXT_PUBLIC_SUPABASE_ANON_KEY)"
+    );
+  }
+
+  return createClient(supabaseUrl, serviceRoleKey, {
+    auth: {
+      persistSession: false,
+      autoRefreshToken: false,
+    },
+  });
 }
 
 function isNetworkOrConfigError(err: unknown): boolean {

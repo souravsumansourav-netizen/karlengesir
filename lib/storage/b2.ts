@@ -12,6 +12,7 @@ import {
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
 import { MULTIPART_THRESHOLD_BYTES, MULTIPART_PART_SIZE_BYTES } from "../constants";
 import { formatContentDisposition } from "../utils";
+import { getEnvVar } from "../env";
 import type {
   StorageProvider,
   CreateUploadResult,
@@ -25,11 +26,11 @@ export class B2Provider implements StorageProvider {
   private bucket: string;
 
   constructor() {
-    const keyId = process.env.B2_KEY_ID;
-    const appKey = process.env.B2_APPLICATION_KEY;
-    const bucket = process.env.B2_BUCKET;
-    let endpoint = process.env.B2_ENDPOINT || "s3.us-east-005.backblazeb2.com";
-    const region = process.env.B2_REGION || "us-east-005";
+    const keyId = getEnvVar("B2_KEY_ID");
+    const appKey = getEnvVar("B2_APPLICATION_KEY");
+    const bucket = getEnvVar("B2_BUCKET");
+    let endpoint = getEnvVar("B2_ENDPOINT") || "s3.us-east-005.backblazeb2.com";
+    const region = getEnvVar("B2_REGION") || "us-east-005";
 
     if (!keyId || !appKey || !bucket) {
       // In development or when testing without full credentials, warn
