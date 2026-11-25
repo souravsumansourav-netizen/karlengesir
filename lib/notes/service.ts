@@ -156,7 +156,8 @@ export async function getAllNotes(): Promise<Note[]> {
     const { data, error } = await supabase
       .from("notes")
       .select("id, content, created_at, updated_at")
-      .order("updated_at", { ascending: false });
+      .order("updated_at", { ascending: false })
+      .limit(50);
 
     if (error) {
       if (isNetworkOrConfigError(error)) {

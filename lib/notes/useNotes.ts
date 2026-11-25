@@ -9,6 +9,7 @@ export function useNotes() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const notesRef = useRef<Note[]>([]);
+  const lastFetchedAtRef = useRef<number>(0);
 
   // Keep ref synchronized with state for reliable rollback in closures
   useEffect(() => {
@@ -18,6 +19,7 @@ export function useNotes() {
   const fetchNotes = useCallback(async (silent = false) => {
     if (!silent) setLoading(true);
     setError(null);
+    lastFetchedAtRef.current = Date.now();
 
     try {
       const res = await fetch("/api/notes", {
@@ -58,32 +60,23 @@ export function useNotes() {
     fetchNotes(false);
   }, [fetchNotes]);
 
-  // Refresh list when browser tab regains focus or visibility, plus periodic sync for multi-device updates
+  // Throttled silent refresh when tab becomes visible (at most once every 5 minutes)
   useEffect(() => {
-    const handleFocus = () => {
-      fetchNotes(true);
-    };
+    const REFRESH_THROTTLE_MS = 5 * 60 * 1000;
 
     const handleVisibilityChange = () => {
-      if (document.visibilityState === "visible") {
+      if (
+        document.visibilityState === "visible" &&
+        Date.now() - lastFetchedAtRef.current >= REFRESH_THROTTLE_MS
+      ) {
         fetchNotes(true);
       }
     };
 
-    window.addEventListener("focus", handleFocus);
     document.addEventListener("visibilitychange", handleVisibilityChange);
 
-    // Multi-device sync: poll every 12s when document is visible
-    const interval = setInterval(() => {
-      if (document.visibilityState === "visible") {
-        fetchNotes(true);
-      }
-    }, 12000);
-
     return () => {
-      window.removeEventListener("focus", handleFocus);
       document.removeEventListener("visibilitychange", handleVisibilityChange);
-      clearInterval(interval);
     };
   }, [fetchNotes]);
 

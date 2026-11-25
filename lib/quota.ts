@@ -20,11 +20,22 @@ export async function getStorageQuotaInfo(): Promise<QuotaInfo> {
   try {
     const supabase = createAdminClient();
 
-    // Query all files size_bytes
-    const { data, error } = await supabase.from("files").select("size_bytes");
+    // Use aggregate RPC to avoid egressing every row's size_bytes
+    const { data: rpcData, error: rpcError } = await supabase.rpc("get_storage_usage");
 
-    if (!error && data) {
-      totalBytes = data.reduce((sum, item) => sum + Number(item.size_bytes || 0), 0);
+    if (!rpcError && rpcData) {
+      const row = Array.isArray(rpcData) ? rpcData[0] : rpcData;
+      totalBytes = Number((row as { total_bytes?: number } | null)?.total_bytes || 0);
+    } else {
+      if (rpcError) {
+        console.warn("get_storage_usage RPC failed, falling back to files query:", rpcError.message);
+      }
+      // Fallback: query all files size_bytes only if RPC errors
+      const { data, error } = await supabase.from("files").select("size_bytes");
+
+      if (!error && data) {
+        totalBytes = data.reduce((sum, item) => sum + Number(item.size_bytes || 0), 0);
+      }
     }
   } catch (err) {
     console.warn("Could not retrieve storage quota from Supabase:", err);

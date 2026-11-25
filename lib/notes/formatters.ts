@@ -104,6 +104,57 @@ export function optimizeImage(
   });
 }
 
+function dataUrlToBlob(dataUrl: string): Blob {
+  const commaIdx = dataUrl.indexOf(",");
+  if (commaIdx === -1) {
+    throw new Error("Invalid data URL");
+  }
+  const header = dataUrl.substring(0, commaIdx);
+  const body = dataUrl.substring(commaIdx + 1);
+  const mimeMatch = header.match(/data:([^;,]+)/);
+  const mimeType = mimeMatch ? mimeMatch[1] : "image/jpeg";
+
+  if (!header.includes(";base64")) {
+    return new Blob([decodeURIComponent(body)], { type: mimeType });
+  }
+
+  const binaryStr = atob(body);
+  const bytes = new Uint8Array(binaryStr.length);
+  for (let i = 0; i < binaryStr.length; i++) {
+    bytes[i] = binaryStr.charCodeAt(i);
+  }
+  return new Blob([bytes], { type: mimeType });
+}
+
+/**
+ * Optimizes an image file on the client and uploads it to object storage
+ * via `/api/notes/upload-image`, returning the cacheable image URL.
+ */
+export async function uploadNoteImage(file: File): Promise<string> {
+  const optimizedDataUrl = await optimizeImage(file);
+  const blob = dataUrlToBlob(optimizedDataUrl);
+
+  const formData = new FormData();
+  formData.append("file", blob, file.name || "note-image.jpg");
+
+  const res = await fetch("/api/notes/upload-image", {
+    method: "POST",
+    body: formData,
+  });
+
+  if (!res.ok) {
+    const errData = await res.json().catch(() => ({}));
+    throw new Error(errData.error || `Image upload failed (${res.status})`);
+  }
+
+  const data = (await res.json()) as { url?: string };
+  if (!data.url) {
+    throw new Error("Image upload did not return a URL");
+  }
+
+  return data.url;
+}
+
 /**
  * Converts copied HTML table data (from Microsoft Excel, Google Sheets, or web pages)
  * into a clean, standard Markdown table.
@@ -238,7 +289,7 @@ export function extractImagesAndText(content: string): {
 } {
   if (!content) return { text: "", images: [] };
 
-  const imageRegex = /!\[(.*?)\]\((data:image\/[^;]+;base64,[^)]+|https?:\/\/[^)]+)\)/g;
+  const imageRegex = /!\[(.*?)\]\((data:image\/[^;]+;base64,[^)]+|https?:\/\/[^)]+|\/[^)]+)\)/g;
   const images: AttachedImage[] = [];
   let imageCounter = 1;
 
