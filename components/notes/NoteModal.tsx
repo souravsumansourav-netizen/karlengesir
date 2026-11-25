@@ -15,7 +15,7 @@ import {
   extractImagesAndText,
   convertHtmlTableToMarkdown,
   convertTsvToMarkdown,
-  optimizeImage,
+  uploadNoteImage,
   AttachedImage,
 } from "@/lib/notes/formatters";
 import { NoteContent } from "./NoteContent";
@@ -39,6 +39,7 @@ export function NoteModal({
   const [editedContent, setEditedContent] = useState("");
   const [editedImages, setEditedImages] = useState<AttachedImage[]>([]);
   const [isSaving, setIsSaving] = useState(false);
+  const [uploadingCount, setUploadingCount] = useState(0);
   const [copied, setCopied] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [zoomedImage, setZoomedImage] = useState<string | null>(null);
@@ -138,23 +139,29 @@ export function NoteModal({
     const imageFiles = files.filter((f) => f.type.startsWith("image/"));
     if (imageFiles.length === 0) return;
 
-    for (const file of imageFiles) {
-      try {
-        const dataUrl = await optimizeImage(file);
-        setEditedImages((prev) => [
-          ...prev,
-          {
-            id: `img-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`,
-            name: file.name || `Pasted Image ${prev.length + 1}`,
-            dataUrl,
-            size: file.size,
-          },
-        ]);
-        toast.success(`Image attached: ${file.name || "Pasted image"}`);
-      } catch (err) {
-        console.error("Failed to process image:", err);
-        toast.error("Could not process attached image");
+    setUploadingCount((c) => c + imageFiles.length);
+    try {
+      for (const file of imageFiles) {
+        try {
+          const uploadedUrl = await uploadNoteImage(file);
+          setEditedImages((prev) => [
+            ...prev,
+            {
+              id: `img-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`,
+              name: file.name || `Pasted Image ${prev.length + 1}`,
+              dataUrl: uploadedUrl,
+              size: file.size,
+            },
+          ]);
+          toast.success(`Image attached: ${file.name || "Pasted image"}`);
+        } catch (err) {
+          console.error("Failed to upload image:", err);
+          const msg = err instanceof Error ? err.message : "Could not upload attached image";
+          toast.error(msg);
+        }
       }
+    } finally {
+      setUploadingCount((c) => Math.max(0, c - imageFiles.length));
     }
   };
 
@@ -377,9 +384,9 @@ export function NoteModal({
                     type="button"
                     className={styles.saveBtn}
                     onClick={handleSaveEdit}
-                    disabled={!getCombinedEditedContent().trim() || isSaving}
+                    disabled={!getCombinedEditedContent().trim() || isSaving || uploadingCount > 0}
                   >
-                    {isSaving ? "Saving..." : "Save Changes"}
+                    {uploadingCount > 0 ? "Uploading image..." : isSaving ? "Saving..." : "Save Changes"}
                   </button>
                   <button
                     type="button"

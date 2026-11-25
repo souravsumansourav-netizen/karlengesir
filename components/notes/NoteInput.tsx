@@ -14,7 +14,7 @@ import toast from "react-hot-toast";
 import {
   convertHtmlTableToMarkdown,
   convertTsvToMarkdown,
-  optimizeImage,
+  uploadNoteImage,
   AttachedImage,
 } from "@/lib/notes/formatters";
 import styles from "./notes.module.css";
@@ -28,6 +28,7 @@ export function NoteInput({ onSave, disabled = false }: NoteInputProps) {
   const [content, setContent] = useState("");
   const [images, setImages] = useState<AttachedImage[]>([]);
   const [isSaving, setIsSaving] = useState(false);
+  const [uploadingCount, setUploadingCount] = useState(0);
   const [isDragging, setIsDragging] = useState(false);
 
   const textareaRef = useRef<HTMLTextAreaElement>(null);
@@ -89,29 +90,35 @@ export function NoteInput({ onSave, disabled = false }: NoteInputProps) {
   };
 
   /**
-   * Reads, optimizes, and attaches an image file
+   * Optimizes and uploads an image file to object storage, then attaches its URL
    */
   const addImageFiles = async (files: File[]) => {
     const imageFiles = files.filter((f) => f.type.startsWith("image/"));
     if (imageFiles.length === 0) return;
 
-    for (const file of imageFiles) {
-      try {
-        const dataUrl = await optimizeImage(file);
-        setImages((prev) => [
-          ...prev,
-          {
-            id: `img-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`,
-            name: file.name || `Pasted Image ${prev.length + 1}`,
-            dataUrl,
-            size: file.size,
-          },
-        ]);
-        toast.success(`Image attached: ${file.name || "Pasted image"}`);
-      } catch (err) {
-        console.error("Failed to process image:", err);
-        toast.error("Could not process attached image");
+    setUploadingCount((c) => c + imageFiles.length);
+    try {
+      for (const file of imageFiles) {
+        try {
+          const uploadedUrl = await uploadNoteImage(file);
+          setImages((prev) => [
+            ...prev,
+            {
+              id: `img-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`,
+              name: file.name || `Pasted Image ${prev.length + 1}`,
+              dataUrl: uploadedUrl,
+              size: file.size,
+            },
+          ]);
+          toast.success(`Image attached: ${file.name || "Pasted image"}`);
+        } catch (err) {
+          console.error("Failed to upload image:", err);
+          const msg = err instanceof Error ? err.message : "Could not upload attached image";
+          toast.error(msg);
+        }
       }
+    } finally {
+      setUploadingCount((c) => Math.max(0, c - imageFiles.length));
     }
   };
 
@@ -234,8 +241,9 @@ export function NoteInput({ onSave, disabled = false }: NoteInputProps) {
     }
   };
 
+  const isUploadingImages = uploadingCount > 0;
   const isSaveDisabled =
-    (!content.trim() && images.length === 0) || isSaving || disabled;
+    (!content.trim() && images.length === 0) || isSaving || isUploadingImages || disabled;
 
   return (
     <div
@@ -327,7 +335,7 @@ export function NoteInput({ onSave, disabled = false }: NoteInputProps) {
             onClick={handleSubmit}
             disabled={isSaveDisabled}
           >
-            {isSaving ? "Saving..." : "Save Note"}
+            {isUploadingImages ? "Uploading image..." : isSaving ? "Saving..." : "Save Note"}
           </button>
         </div>
       </div>
